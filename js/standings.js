@@ -67,7 +67,7 @@
         }
         html += '<tr class="' + rowClass + '">';
         html += "<td>" + seed + "</td>";
-        html += '<td class="team-cell"><span class="dot" style="background:' + U.colorForId(t.id) + '"></span>' + U.escapeHtml(t.name) + "</td>";
+        html += '<td><span class="team-cell"><span class="dot" style="background:' + U.colorForId(t.id) + '"></span>' + U.escapeHtml(t.name) + "</span></td>";
         html += "<td>" + gp + "</td><td>" + t.wins + "</td><td>" + t.losses + "</td><td>" + t.otLosses + "</td>";
         html += "<td><strong>" + t.points + "</strong></td>";
         html += "<td>" + t.gf + "</td><td>" + t.ga + "</td><td>" + (diff > 0 ? "+" + diff : diff) + "</td>";
