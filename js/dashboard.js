@@ -34,6 +34,7 @@
       var myDiv = S.getDivision(franchise.divisionId);
       html += '<p class="muted small">GM of <strong>' + U.escapeHtml(myTeam ? myTeam.name : "?") + "</strong> (" + U.escapeHtml(myDiv ? myDiv.name : "?") +
         ') &middot; use <strong>Advance Week</strong> (top right) to move the season forward.</p>';
+      if (myTeam) html += renderMyTeamHub(myTeam);
     }
     html += '<div class="stat-tile-row">';
     html += statTile("Season", season.seasonNumber || 1);
@@ -82,6 +83,107 @@
         window.PHLApp.showTab(b.dataset.goto);
       });
     });
+  }
+
+  // Recent games (played, most recent first) for `teamId`, tagged with
+  // W/L/OTL relative to that team.
+  function recentForm(teamId, limit) {
+    var games = S.getSchedule().filter(function (g) {
+      return g.played && (g.homeTeamId === teamId || g.awayTeamId === teamId);
+    });
+    games.sort(function (a, b) { return b.week - a.week; });
+    return games.slice(0, limit).map(function (g) {
+      var isHome = g.homeTeamId === teamId;
+      var myScore = isHome ? g.homeScore : g.awayScore;
+      var oppScore = isHome ? g.awayScore : g.homeScore;
+      var oppId = isHome ? g.awayTeamId : g.homeTeamId;
+      var result = myScore > oppScore ? "W" : (g.wentToOT ? "OTL" : "L");
+      return { game: g, result: result, oppId: oppId, myScore: myScore, oppScore: oppScore };
+    });
+  }
+
+  // Next unplayed games (soonest first) for `teamId`.
+  function upcomingGames(teamId, limit) {
+    var games = S.getSchedule().filter(function (g) {
+      return !g.played && (g.homeTeamId === teamId || g.awayTeamId === teamId);
+    });
+    games.sort(function (a, b) { return a.week - b.week; });
+    return games.slice(0, limit);
+  }
+
+  // The "full at-a-glance hub" — recent form, next 3 games, cap health,
+  // roster-minimum status, and a quick Inbox preview, all on one card so
+  // there's no need to hop between tabs just to see where things stand.
+  function renderMyTeamHub(myTeam) {
+    var recent = recentForm(myTeam.id, 5);
+    var upcoming = upcomingGames(myTeam.id, 3);
+    var cap = S.capForTeam(myTeam.id);
+    var used = S.capUsed(myTeam.id);
+    var space = S.capSpace(myTeam.id);
+    var pct = U.clamp(cap ? (used / cap) * 100 : 0, 0, 100);
+    var rosterOk = S.wouldMeetRosterMinimum(myTeam.id);
+    var unread = S.unreadNotificationCount();
+    var recentNotifs = S.getNotifications().slice(0, 3);
+
+    var html = '<div class="form-card"><h3>Your Team At a Glance</h3><div class="dashboard-hub-grid">';
+
+    html += '<div class="hub-section"><h4>Recent Form</h4>';
+    if (!recent.length) {
+      html += '<p class="muted small">No games played yet.</p>';
+    } else {
+      html += '<div class="form-pills">';
+      recent.forEach(function (r) {
+        var opp = S.getTeam(r.oppId);
+        var cls = r.result === "W" ? "pill-clinch" : r.result === "OTL" ? "pill-warn" : "pill-loss";
+        html += '<span class="pill ' + cls + ' small" title="' + r.myScore + '-' + r.oppScore + ' vs ' +
+          U.escapeHtml(opp ? opp.abbr : "?") + ' (Week ' + r.game.week + ')">' + r.result + '</span>';
+      });
+      html += "</div>";
+    }
+    html += "</div>";
+
+    html += '<div class="hub-section"><h4>Next Up</h4>';
+    if (!upcoming.length) {
+      html += '<p class="muted small">No games scheduled.</p>';
+    } else {
+      html += '<ul class="mini-standings">';
+      upcoming.forEach(function (g) {
+        var isHome = g.homeTeamId === myTeam.id;
+        var opp = S.getTeam(isHome ? g.awayTeamId : g.homeTeamId);
+        html += "<li><span>Week " + g.week + "</span><span>" + (isHome ? "vs " : "@ ") + U.escapeHtml(opp ? opp.abbr : "?") + "</span></li>";
+      });
+      html += "</ul>";
+    }
+    html += "</div>";
+
+    html += '<div class="hub-section"><h4>Cap Health</h4>';
+    html += '<div class="cap-bar' + (space < 0 ? " cap-over" : "") + '"><div class="cap-bar-fill" style="width:' + pct + '%"></div></div>';
+    html += '<p class="muted small">' + U.formatMoney(used) + " / " + U.formatMoney(cap) +
+      (space < 0 ? " &mdash; over by " + U.formatMoney(Math.abs(space)) : " &mdash; " + U.formatMoney(space) + " free") + "</p>";
+    html += "</div>";
+
+    html += '<div class="hub-section"><h4>Roster Status</h4>';
+    html += rosterOk
+      ? '<p class="muted small">Meets the ' + S.ROSTER_MIN.total + "-player roster minimum (" + S.ROSTER_MIN.F + "F/" + S.ROSTER_MIN.D + "D/" + S.ROSTER_MIN.G + "G).</p>"
+      : '<p class="pill pill-warn small">Below the roster minimum &mdash; sign or call up players before advancing.</p>';
+    if (!S.isTransactionWindowOpen()) html += '<p class="pill pill-warn small">Trade deadline passed &mdash; transactions locked.</p>';
+    html += "</div>";
+
+    html += '<div class="hub-section"><h4>Inbox <span class="pill pill-accent small">' + unread + " unread</span></h4>";
+    if (!recentNotifs.length) {
+      html += '<p class="muted small">No notifications yet.</p>';
+    } else {
+      html += '<ul class="mini-standings">';
+      recentNotifs.forEach(function (n) {
+        html += "<li><span>" + U.escapeHtml(n.title || "") + "</span>" + (n.read ? "" : '<span class="pill pill-accent small">New</span>') + "</li>";
+      });
+      html += "</ul>";
+    }
+    html += '<button class="btn btn-sm" data-goto="inbox">View Inbox</button>';
+    html += "</div>";
+
+    html += "</div></div>";
+    return html;
   }
 
   function statTile(label, value) {

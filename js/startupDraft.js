@@ -126,11 +126,20 @@
     advancePhase(sd);
   }
 
+  // Overall cutoff for the division currently on the clock (see
+  // js/state.js overallCapForDivision) — phase ids ("pro", "contender",
+  // "prospect") match division ids directly. Null (Pro) means uncapped.
+  function currentPhaseCap(sd) {
+    return sd.phase ? S.overallCapForDivision(sd.phase) : null;
+  }
+
   function pickForTeam(teamId, playerId) {
     var sd = S.getStartupDraft();
     if (sd.status !== "active") return;
     var player = S.getPlayer(playerId);
     if (!player || !player.startupDraftPool || player.teamId) return;
+    var cap = currentPhaseCap(sd);
+    if (cap != null && player.overall > cap) return; // above this phase's division overall cutoff — blocked
     S.updatePlayer(playerId, { teamId: teamId, startupDraftPool: false, contractYears: 3 });
     sd.picks.push({
       pickNumber: sd.picks.length + 1,
@@ -139,6 +148,13 @@
       teamId: teamId,
       playerId: playerId,
     });
+    advancePickIndex(sd);
+  }
+
+  // Shared tail logic for both an actual pick and a skipped one (see
+  // skipPick) — advances the phase's pick pointer and either rolls to the
+  // next phase or finishes the draft entirely.
+  function advancePickIndex(sd) {
     sd.pickIndexInPhase += 1;
     if (!S.getStartupPool().length) {
       // The real player pool (192 players) is smaller than a full 8-round
@@ -150,6 +166,22 @@
     } else {
       S.updateStartupDraft(sd);
     }
+  }
+
+  // A team passes on its pick this round — used when the overall cutoff
+  // (see currentPhaseCap) leaves no eligible player in the pool for this
+  // team's current phase. Rather than ending the whole draft (the pool as
+  // a whole may still have plenty left for other phases), this just moves
+  // the clock forward one slot.
+  function skipPick(sd, teamId) {
+    sd.picks.push({
+      pickNumber: sd.picks.length + 1,
+      phase: sd.phase,
+      round: currentRoundIndex(sd) + 1,
+      teamId: teamId,
+      playerId: null, // no eligible player under the division's overall cutoff
+    });
+    advancePickIndex(sd);
   }
 
   // Best-overall-available, weighted toward whatever position a team still
@@ -165,6 +197,8 @@
   function aiPickPlayerFor(teamId) {
     var sd = S.getStartupDraft();
     var pool = S.getStartupPool();
+    var cap = currentPhaseCap(sd);
+    if (cap != null) pool = pool.filter(function (p) { return p.overall <= cap; });
     if (!pool.length) return null;
 
     var need = teamNeedCounts(teamId);
@@ -216,7 +250,7 @@
     if (teamId === fr.teamId) return; // user's turn — they pick manually below
     var p = aiPickPlayerFor(teamId);
     if (p) pickForTeam(teamId, p.id);
-    else finishDraft(S.getStartupDraft()); // defensive — pool emptied mid-check
+    else skipPick(sd, teamId); // no player left under this phase's overall cutoff for this team — pass
   }
 
   function simulateUntilMyTurn() {
@@ -241,8 +275,8 @@
       var teamId = currentTeamId(sd);
       if (!teamId) break;
       var p = aiPickPlayerFor(teamId);
-      if (!p) { finishDraft(S.getStartupDraft()); break; }
-      pickForTeam(teamId, p.id);
+      if (p) pickForTeam(teamId, p.id);
+      else skipPick(sd, teamId); // no player left under this phase's overall cutoff for this team — pass
       guard++;
     }
   }
@@ -346,8 +380,13 @@
         '<option value="">All Positions</option><option value="F">Forward</option><option value="D">Defense</option><option value="G">Goalie</option>' +
         "</select></div>";
 
+      var phaseCap = currentPhaseCap(sd);
       var pool = S.getStartupPool().slice().sort(function (a, b) { return b.overall - a.overall; });
       if (posFilter) pool = pool.filter(function (p) { return p.position === posFilter; });
+      if (phaseCap != null) {
+        html += '<p class="muted small">' + PHASE_LABEL[sd.phase] + " division overall cutoff: " + phaseCap + " or below. Players above that stay in the pool for now (they may go undrafted).</p>";
+        pool = pool.filter(function (p) { return p.overall <= phaseCap; });
+      }
       html += '<table class="data-table"><thead><tr><th>Nametag</th><th>Pos</th><th>Archetype</th><th>OVR</th><th>POT</th><th></th></tr></thead><tbody>';
       pool.forEach(function (p) {
         html += "<tr><td>" + U.escapeHtml(p.name) + "</td><td>" + p.position + "</td><td>" + U.escapeHtml(p.archetype || "") + "</td>" +
@@ -363,9 +402,10 @@
       html += '<h3>Recent Picks</h3><table class="data-table"><thead><tr><th>#</th><th>Phase</th><th>Rd</th><th>Team</th><th>Player</th><th>Pos</th><th>OVR</th></tr></thead><tbody>';
       sd.picks.slice(-15).reverse().forEach(function (pick) {
         var t = S.getTeam(pick.teamId);
-        var p = S.getPlayer(pick.playerId);
+        var p = pick.playerId ? S.getPlayer(pick.playerId) : null;
         html += "<tr><td>" + pick.pickNumber + "</td><td>" + PHASE_LABEL[pick.phase] + "</td><td>" + pick.round + "</td><td>" +
-          U.escapeHtml(t ? t.abbr : "?") + "</td><td>" + U.escapeHtml(p ? p.name : "?") + "</td><td>" + (p ? p.position : "") + "</td><td>" + (p ? p.overall : "") + "</td></tr>";
+          U.escapeHtml(t ? t.abbr : "?") + "</td><td>" + (pick.playerId ? U.escapeHtml(p ? p.name : "?") : '<span class="muted">Passed (overall cutoff)</span>') +
+          "</td><td>" + (p ? p.position : "") + "</td><td>" + (p ? p.overall : "") + "</td></tr>";
       });
       html += "</tbody></table>";
     }

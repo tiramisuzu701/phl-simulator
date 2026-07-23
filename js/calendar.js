@@ -89,9 +89,20 @@
     }
   }
 
+  // Weeks 10-11 of the regular season are the mid-season trade-deadline
+  // break — no games are scheduled for them (see js/schedule.js
+  // BREAK_WEEKS), but it's still the last window for trades, free-agent
+  // signings, and roster drops before the deadline locks at week 12.
+  var BREAK_WEEKS = [10, 11];
+
   function runRegularWeek(season, summary) {
-    var count = window.PHLSchedule.simulateCalendarWeek(season.calendarWeek);
-    summary.push(count + " game(s) played across the league this week.");
+    var onBreak = BREAK_WEEKS.indexOf(season.calendarWeek) !== -1;
+    if (onBreak) {
+      summary.push("Trade deadline break — no games this week. Last chance to make trades, sign free agents, or drop roster players before the deadline locks.");
+    } else {
+      var count = window.PHLSchedule.simulateCalendarWeek(season.calendarWeek);
+      summary.push(count + " game(s) played across the league this week.");
+    }
 
     var AI = window.PHLAIManager;
     if (AI) {
@@ -100,14 +111,15 @@
       AI.aiProposeTradesToUser();
     }
 
-    // First-half MVPs are revealed right at week 7 of the 12-week regular
-    // season (see js/mvp.js) — one per division.
+    // First-half MVPs are revealed right at week 7 of the regular season
+    // (see js/mvp.js) — one per division.
     if (season.calendarWeek === 7 && window.PHLMvp) {
       window.PHLMvp.computeFirstHalfMvps();
       summary.push("First-Half MVPs have been announced around the league.");
     }
 
     var weeksTotal = settings().regularSeasonWeeks || 12;
+    var nextWeek = season.calendarWeek + 1;
     if (season.calendarWeek >= weeksTotal) {
       if (window.PHLMvp) {
         window.PHLMvp.computeSecondHalfMvps();
@@ -120,7 +132,15 @@
       S.updateSeason({ phase: "playoffs", calendarWeek: 1 });
       summary.push("Regular season complete — the playoffs begin.");
     } else {
-      S.updateSeason({ calendarWeek: season.calendarWeek + 1 });
+      // The trade deadline locks league-wide the moment the break ends
+      // (week 12 onward) — trades, free-agent signings, and releases stay
+      // blocked through the rest of the season and all of the playoffs,
+      // until the next off-season begins (see js/state.js
+      // isTransactionWindowOpen).
+      if (BREAK_WEEKS.indexOf(nextWeek) === -1 && nextWeek > BREAK_WEEKS[BREAK_WEEKS.length - 1] && season.calendarWeek <= BREAK_WEEKS[BREAK_WEEKS.length - 1]) {
+        summary.push("The trade deadline has passed — trades, free-agent signings, and releases are locked league-wide until the next off-season.");
+      }
+      S.updateSeason({ calendarWeek: nextWeek });
     }
   }
 

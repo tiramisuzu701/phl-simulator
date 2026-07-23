@@ -44,12 +44,22 @@
     // in last place) simply misses the playoffs — no extra round is added
     // for it.
     // gamesPerWeek drives the weekly calendar (see js/calendar.js): each
-    // division plays a fixed 12-week regular season, so gamesPerWeek sets
-    // its total game count too (Pro: 2/wk x 12wk = 24 games; Contender &
+    // division plays a fixed 12 game-weeks of regular season (now spread
+    // across a 14 calendar-week span — weeks 1-9 and 12-14 — to make room
+    // for the week 10-11 trade-deadline break), so gamesPerWeek sets its
+    // total game count too (Pro: 2/wk x 12wk = 24 games; Contender &
     // Prospect: 3/wk x 12wk = 36 games).
-    { id: "prospect", name: "Prospect", tier: 1, salaryCap: 1000000, gamesPerWeek: 3, playoff: { teams: 10, byes: 6 } },
-    { id: "contender", name: "Contender", tier: 2, salaryCap: 2000000, gamesPerWeek: 3, playoff: { teams: 8, byes: 8 } },
-    { id: "pro", name: "Pro", tier: 3, salaryCap: 4000000, gamesPerWeek: 2, playoff: { teams: 4, byes: 4 } },
+    //
+    // overallCap is the highest player overall allowed while rostered in
+    // that division (enforced at every draft/trade/promotion/signing —
+    // see js/state.js meetsOverallCap); null means uncapped (Pro).
+    // salaryCapMax is the ceiling a team's effective cap can scale up to
+    // based on last season's win rate (see js/state.js capForTeam) — the
+    // salaryCap value below stays the fixed base a team starts a fresh
+    // save (or a losing season) at.
+    { id: "prospect", name: "Prospect", tier: 1, salaryCap: 1000000, salaryCapMax: 1500000, overallCap: 79, gamesPerWeek: 3, playoff: { teams: 10, byes: 6 } },
+    { id: "contender", name: "Contender", tier: 2, salaryCap: 2000000, salaryCapMax: 3200000, overallCap: 91, gamesPerWeek: 3, playoff: { teams: 8, byes: 8 } },
+    { id: "pro", name: "Pro", tier: 3, salaryCap: 4000000, salaryCapMax: 5400000, overallCap: null, gamesPerWeek: 2, playoff: { teams: 4, byes: 4 } },
   ];
 
   // Real PHL Season 4 roster sweep (Pro + Contender + Prospect, every
@@ -352,7 +362,11 @@
       lineup: { F: 2, D: 2, G: 1 }, // active lineup per game (Puck is 2F+2D+1G)
       targetGamesPerTeam: 18, // legacy fallback only — see division.gamesPerWeek
       offseasonWeeks: 5,
-      regularSeasonWeeks: 12,
+      // Calendar-week span of the regular season. Games are only played on
+      // 12 of these 14 weeks — weeks 10-11 are the trade-deadline break
+      // (see js/schedule.js PLAYING_WEEKS/BREAK_WEEKS) — but calendarWeek
+      // still counts through all 14 before playoffs begin.
+      regularSeasonWeeks: 14,
       pointsForWin: 2,
       pointsForOtLoss: 1,
       playoffTeamsPerDivision: 4,
@@ -382,7 +396,8 @@
     players: startupPool,
     // Single "Advance Week" button (js/calendar.js) drives everything —
     // no more separate sim/draft/playoff buttons to click through. Every
-    // season cycles offseason(5wk, freeform) -> regular(12wk) ->
+    // season cycles offseason(5wk, freeform) -> regular(14 calendar wks,
+    // 12 of which play games, wks 10-11 are the trade-deadline break) ->
     // playoffs(up to 4wk, per-division) -> back to offseason.
     season: {
       seasonNumber: 1,

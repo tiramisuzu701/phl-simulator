@@ -57,8 +57,12 @@
     }
     var partner = S.getTeam(view.partnerId);
 
+    var windowOpen = S.isTransactionWindowOpen();
     var html = '<div class="panel-header"><h2>Trades</h2></div>';
     html += '<p class="muted small">Propose a player-for-player trade with another team. Trade value is a simple, visible estimate — Overall + unrealized Potential, minus salary drag, plus years of contractual control — the other side won\'t accept a deal that gives up much more value than it gets back.</p>';
+    if (!windowOpen) {
+      html += '<p class="muted small" style="color:var(--series-red, #e05252);">The trade deadline has passed — trades are locked league-wide until the next off-season.</p>';
+    }
 
     html += '<div class="filter-bar"><label>Trade with<select id="trade-partner">';
     partners.forEach(function (t) {
@@ -77,7 +81,7 @@
     html += '<div class="trade-summary-row"><span>You give (' + view.mine.length + ' player' + (view.mine.length === 1 ? "" : "s") + ')</span><strong>Value ' + mineValue + '</strong></div>';
     html += '<div class="trade-summary-row"><span>You get (' + view.theirs.length + ' player' + (view.theirs.length === 1 ? "" : "s") + ')</span><strong>Value ' + theirsValue + '</strong></div>';
     html += '<div class="form-actions">';
-    html += '<button class="btn btn-primary" data-action="propose-trade"' + (!view.mine.length || !view.theirs.length ? " disabled" : "") + '>Propose Trade</button>';
+    html += '<button class="btn btn-primary" data-action="propose-trade"' + (!view.mine.length || !view.theirs.length || !windowOpen ? " disabled" : "") + '>Propose Trade</button>';
     html += '<button class="btn" data-action="clear-trade">Clear Selections</button>';
     html += "</div></div>";
 
@@ -150,6 +154,32 @@
     var mine = view.mine.map(S.getPlayer).filter(Boolean);
     var theirs = view.theirs.map(S.getPlayer).filter(Boolean);
     if (!mine.length || !theirs.length) return;
+
+    if (!S.isTransactionWindowOpen()) {
+      alert("The trade deadline has passed — trades are locked league-wide until the next off-season.");
+      return;
+    }
+
+    var nmcBlocked = mine.filter(function (p) { return !!p.nmc; });
+    if (nmcBlocked.length) {
+      alert(nmcBlocked.map(function (p) { return p.name; }).join(", ") + " has a No-Movement Clause and can't be traded while it's active — toggle it off in Team Management first.");
+      return;
+    }
+
+    var myDiv = S.getTeam(myTeamId).division;
+    var partnerDiv = S.getTeam(partnerId).division;
+    var overCapIncoming = theirs.filter(function (p) { return !S.meetsOverallCap(p.overall, myDiv); });
+    if (overCapIncoming.length) {
+      alert(overCapIncoming.map(function (p) { return p.name + " (" + p.overall + " OVR)"; }).join(", ") +
+        " would be above the " + S.getDivision(myDiv).name + " division's " + S.overallCapForDivision(myDiv) + " overall cutoff — the trade can't go through.");
+      return;
+    }
+    var overCapOutgoing = mine.filter(function (p) { return !S.meetsOverallCap(p.overall, partnerDiv); });
+    if (overCapOutgoing.length) {
+      alert(overCapOutgoing.map(function (p) { return p.name + " (" + p.overall + " OVR)"; }).join(", ") +
+        " would be above the " + S.getDivision(partnerDiv).name + " division's " + S.overallCapForDivision(partnerDiv) + " overall cutoff — " + S.getTeam(partnerId).name + " won't take them.");
+      return;
+    }
 
     if (!S.wouldMeetRosterMinimum(myTeamId, view.mine, theirs)) {
       alert("That trade would drop you below the required " + S.ROSTER_MIN.total + "-player, " + S.ROSTER_MIN.F + "F/" + S.ROSTER_MIN.D + "D/" + S.ROSTER_MIN.G + "G roster minimum.");

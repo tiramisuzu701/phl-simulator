@@ -63,10 +63,12 @@
     if (!d.season.playoffs) d.season.playoffs = {};
     if (!d.season.pendingGrowthPicks) d.season.pendingGrowthPicks = [];
     d.divisions.forEach(function (div) {
+      var starterDiv = starter.divisions.find(function (sd) { return sd.id === div.id; });
       if (div.gamesPerWeek == null) {
-        var starterDiv = starter.divisions.find(function (sd) { return sd.id === div.id; });
         div.gamesPerWeek = starterDiv ? starterDiv.gamesPerWeek : 2;
       }
+      if (div.overallCap === undefined) div.overallCap = starterDiv ? starterDiv.overallCap : null;
+      if (div.salaryCapMax == null) div.salaryCapMax = starterDiv ? starterDiv.salaryCapMax : div.salaryCap;
     });
     // Backfill logoUrl on older saves (from before real PHL logos were
     // wired in) for any of the 26 built-in teams — matched by id, since
@@ -91,6 +93,12 @@
       if (!p.playoffStats) p.playoffStats = freshStatLine();
       if (p.statsAtHalf === undefined) p.statsAtHalf = null;
       if (p.starter == null) p.starter = false;
+      if (p.nmc == null) p.nmc = false;
+      if (!p.contractOfferHistory) p.contractOfferHistory = [];
+    });
+    d.teams.forEach(function (t) {
+      if (t.lastSeasonWins == null) t.lastSeasonWins = 0;
+      if (t.lastSeasonGames == null) t.lastSeasonGames = 0;
     });
   }
 
@@ -442,12 +450,20 @@
 
   // ---------------- Cap helpers ----------------
   // Salary cap is per-division (top divisions have bigger budgets), not a
-  // single league-wide number.
+  // single league-wide number. Each team's effective cap also scales up
+  // from the division base toward the division max based on how many of
+  // their games they won last season (see snapshotTeamRecordsForCap) —
+  // winning more games this season raises next season's cap faster.
   function capForTeam(teamId) {
     var t = getTeam(teamId);
     if (!t) return 0;
     var div = getDivision(t.division);
-    return div && div.salaryCap != null ? div.salaryCap : 1000000;
+    var base = div && div.salaryCap != null ? div.salaryCap : 1000000;
+    var max = div && div.salaryCapMax != null ? div.salaryCapMax : base;
+    var games = t.lastSeasonGames || 0;
+    if (games <= 0) return base;
+    var winPct = U.clamp((t.lastSeasonWins || 0) / games, 0, 1);
+    return Math.round(base + winPct * (max - base));
   }
   function capUsed(teamId) {
     return getRoster(teamId).reduce(function (sum, p) {
@@ -456,6 +472,86 @@
   }
   function capSpace(teamId) {
     return capForTeam(teamId) - capUsed(teamId);
+  }
+  // Snapshot each team's just-concluded regular season W-L-OTL record onto
+  // lastSeasonWins/lastSeasonGames so capForTeam(...) can keep scaling off
+  // it after resetTeamRecords() wipes the live record for the new season.
+  // Must be called BEFORE resetTeamRecords() each new season.
+  function snapshotTeamRecordsForCap() {
+    data.teams.forEach(function (t) {
+      var games = (t.wins || 0) + (t.losses || 0) + (t.otLosses || 0);
+      if (games > 0) {
+        t.lastSeasonWins = t.wins || 0;
+        t.lastSeasonGames = games;
+      }
+    });
+    save();
+  }
+
+  // ---------------- Overall cutoffs (division ceilings) ------------------
+  // A division's overallCap (see js/starterData.js) is the highest overall
+  // a player may have while rostered/drafted there — null means uncapped
+  // (Pro division). Enforced as a blocking guard at every division-entry
+  // point: Startup Draft picks, trades, promotions/call-ups, and free-agent
+  // signings, for both the user and AI teams (see js/trades.js,
+  // js/contracts.js, js/promotions.js, js/aiManager.js, js/startupDraft.js).
+  // Player growth (js/stats.js developPlayer) is also capped at this
+  // ceiling for currently-rostered players.
+  function overallCapForDivision(divisionId) {
+    var div = getDivision(divisionId);
+    return div && div.overallCap != null ? div.overallCap : null;
+  }
+  function meetsOverallCap(overall, divisionId) {
+    var cap = overallCapForDivision(divisionId);
+    if (cap == null) return true;
+    return overall <= cap;
+  }
+
+  // ---------------- No-Movement Clause (NMC) ------------------------------
+  // A manually-toggled flag (p.nmc) the user sets from Team Management to
+  // protect up to NMC_MAX_PER_TEAM players from being released, traded, or
+  // promoted away. AI teams don't self-assign NMCs.
+  var NMC_MAX_PER_TEAM = 2;
+  function nmcCountForTeam(teamId) {
+    return getRoster(teamId).filter(function (p) { return !!p.nmc; }).length;
+  }
+
+  // ---------------- Trade deadline / transaction window -------------------
+  // True while trades, free-agent signings, and releases are allowed. The
+  // window is open all offseason and through the first 11 calendar weeks of
+  // the regular season (weeks 1-9 play games, 10-11 are the trade-deadline
+  // break) and closes league-wide from week 12 through the end of playoffs,
+  // reopening again once the next offseason begins. Note: this deliberately
+  // does NOT gate js/aiManager.js's autoReleaseToCompliance() — that's a
+  // forced cap-compliance safety valve, not a voluntary roster move.
+  function isTransactionWindowOpen() {
+    var season = data.season;
+    if (!season) return true;
+    if (season.phase === "offseason") return true;
+    if (season.phase === "regular") return (season.calendarWeek || 1) <= 11;
+    return false; // playoffs
+  }
+
+  // ---------------- Contract offer history ---------------------------------
+  // Tracks sign + re-sign offers made to a player, by season, so
+  // js/contracts.js can enforce "at most 3 offers per player per season,
+  // and each offer amount must differ from the player's prior offers this
+  // season" (years may repeat).
+  function getSeasonNumber() {
+    return (data.season && data.season.seasonNumber) || 1;
+  }
+  function contractOffersThisSeason(playerId) {
+    var p = getPlayer(playerId);
+    if (!p || !p.contractOfferHistory) return [];
+    var sn = getSeasonNumber();
+    return p.contractOfferHistory.filter(function (o) { return o.season === sn; });
+  }
+  function recordContractOffer(playerId, amount) {
+    var p = getPlayer(playerId);
+    if (!p) return;
+    if (!p.contractOfferHistory) p.contractOfferHistory = [];
+    p.contractOfferHistory.push({ season: getSeasonNumber(), amount: amount });
+    save();
   }
 
   window.PHLState = {
@@ -488,6 +584,14 @@
     capForTeam: capForTeam,
     capUsed: capUsed,
     capSpace: capSpace,
+    snapshotTeamRecordsForCap: snapshotTeamRecordsForCap,
+    overallCapForDivision: overallCapForDivision,
+    meetsOverallCap: meetsOverallCap,
+    NMC_MAX_PER_TEAM: NMC_MAX_PER_TEAM,
+    nmcCountForTeam: nmcCountForTeam,
+    isTransactionWindowOpen: isTransactionWindowOpen,
+    contractOffersThisSeason: contractOffersThisSeason,
+    recordContractOffer: recordContractOffer,
     getSeason: getSeason,
     getSchedule: getSchedule,
     setSchedule: setSchedule,

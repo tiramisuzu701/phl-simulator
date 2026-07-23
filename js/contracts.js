@@ -61,21 +61,25 @@
     html += '<div class="cap-bar cap-bar-lg' + (space < 0 ? " cap-over" : "") + '"><div class="cap-bar-fill" style="width:' + pct + '%"></div></div>';
     html += '<div class="muted">Cap Used: ' + U.formatMoney(used) + " / " + U.formatMoney(cap) + " &middot; Space: " + U.formatMoney(space) + "</div>";
     if (space < 0) html += '<div class="warning-banner">Over the cap by ' + U.formatMoney(Math.abs(space)) + ". Release players to get compliant.</div>";
+    if (!S.isTransactionWindowOpen()) html += '<div class="warning-banner">The trade deadline has passed — signings and releases are locked league-wide until the next off-season.</div>';
     html += "</div>";
 
+    var nmcUsed = S.nmcCountForTeam(selectedTeamId);
     html += "<h3>Roster (" + roster.length + " / " + S.getSettings().rosterMax + ")</h3>";
+    html += '<p class="muted small">No-Movement Clauses used: ' + nmcUsed + ' / ' + S.NMC_MAX_PER_TEAM + ' — an NMC\'d player can\'t be released, traded, or promoted away until you toggle it off.</p>';
     if (!roster.length) {
       html += '<p class="muted">No players on this roster yet.</p>';
     } else {
-      html += '<table class="data-table"><thead><tr><th>Name</th><th>Pos</th><th>Archetype</th><th>OVR</th><th>POT</th><th>Salary</th><th>Years Left</th><th>Asking Price</th><th></th></tr></thead><tbody>';
+      html += '<table class="data-table"><thead><tr><th>Name</th><th>Pos</th><th>Archetype</th><th>OVR</th><th>POT</th><th>Salary</th><th>Years Left</th><th>Asking Price</th><th>NMC</th><th></th></tr></thead><tbody>';
       roster.forEach(function (p) {
         var asking = askingPriceFor(p, team);
         html += "<tr><td>" + U.escapeHtml(p.name) + "</td><td>" + p.position + "</td><td>" + U.escapeHtml(p.archetype || "") + "</td><td>" + p.overall + "</td><td>" + p.potential + "</td><td>" + U.formatMoney(p.salary) + "</td>";
         html += "<td>" + (p.contractYears <= 1 ? '<span class="pill pill-warn">' + p.contractYears + " (expiring)</span>" : p.contractYears) + "</td>";
         html += "<td>" + U.formatMoney(asking) + "</td>";
+        html += '<td><button class="btn btn-sm' + (p.nmc ? " btn-primary" : "") + '" data-action="toggle-nmc" data-id="' + p.id + '" title="No-Movement Clause">' + (p.nmc ? "NMC ✓" : "—") + '</button></td>';
         html += '<td class="row-actions"><button class="btn btn-sm" data-action="toggle-offer" data-mode="resign" data-id="' + p.id + '">Re-sign</button>' +
           '<button class="btn btn-sm btn-danger" data-action="release" data-id="' + p.id + '">Release</button></td></tr>';
-        if (offer.playerId === p.id) html += offerRow(p, team, "resign", 9);
+        if (offer.playerId === p.id) html += offerRow(p, team, "resign", 10);
       });
       html += "</tbody></table>";
     }
@@ -134,6 +138,14 @@
       b.addEventListener("click", function () {
         var p = S.getPlayer(b.dataset.id);
         if (!p) return;
+        if (!S.isTransactionWindowOpen()) {
+          alert("The trade deadline has passed — releases are locked league-wide until the next off-season.");
+          return;
+        }
+        if (p.nmc) {
+          alert(p.name + " has a No-Movement Clause and can't be released while it's active. Toggle it off first.");
+          return;
+        }
         if (!S.wouldMeetRosterMinimum(selectedTeamId, [p.id])) {
           alert("Can't release " + p.name + " — every team must carry at least " + S.ROSTER_MIN.total + " players with a legal " +
             S.ROSTER_MIN.F + "F/" + S.ROSTER_MIN.D + "D/" + S.ROSTER_MIN.G + "G lineup, and releasing them would drop you below it.");
@@ -144,6 +156,23 @@
           render();
           if (window.PHLApp) window.PHLApp.refresh();
         }
+      });
+    });
+    container.querySelectorAll('[data-action="toggle-nmc"]').forEach(function (b) {
+      b.addEventListener("click", function () {
+        var p = S.getPlayer(b.dataset.id);
+        if (!p) return;
+        if (!p.nmc) {
+          if (S.nmcCountForTeam(selectedTeamId) >= S.NMC_MAX_PER_TEAM) {
+            alert("You can only have " + S.NMC_MAX_PER_TEAM + " No-Movement Clauses active at a time. Toggle one off first.");
+            return;
+          }
+          S.updatePlayer(p.id, { nmc: true });
+        } else {
+          S.updatePlayer(p.id, { nmc: false });
+        }
+        render();
+        if (window.PHLApp) window.PHLApp.refresh();
       });
     });
     container.querySelectorAll('[data-action="toggle-offer"]').forEach(function (b) {
@@ -185,6 +214,24 @@
     var p = S.getPlayer(playerId);
     var team = S.getTeam(selectedTeamId);
     if (!p || !team) return;
+    if (!S.isTransactionWindowOpen()) {
+      alert("The trade deadline has passed — signings are locked league-wide until the next off-season.");
+      return;
+    }
+    if (mode === "sign" && !S.meetsOverallCap(p.overall, team.division)) {
+      alert(p.name + " (" + p.overall + " OVR) is above the " + S.getDivision(team.division).name + " division's " +
+        S.overallCapForDivision(team.division) + " overall cutoff and can't be signed here.");
+      return;
+    }
+    var offersThisSeason = S.contractOffersThisSeason(p.id);
+    if (offersThisSeason.length >= 3) {
+      alert("You've already made 3 contract offers to " + p.name + " this season — that's the maximum allowed.");
+      return;
+    }
+    if (offersThisSeason.some(function (o) { return o.amount === offer.amount; })) {
+      alert("Your offer amount must be different from an offer you've already made " + p.name + " this season. Try a different salary.");
+      return;
+    }
     if (mode === "sign" && !isEligible(p, team.division)) {
       alert(p.name + " is a breakout rookie not yet eligible to sign with a " + S.getDivision(team.division).name + " team.");
       return;
@@ -204,6 +251,10 @@
     var asking = askingPriceFor(p, team);
     var rejectChance = U.contractRejectChance(asking, offer.amount, offer.years);
     var rejected = Math.random() < rejectChance;
+    // Every offer counts toward the 3-per-season limit, and its amount is
+    // remembered so a later offer this season must differ — whether or not
+    // this particular offer is accepted.
+    S.recordContractOffer(p.id, offer.amount);
     if (rejected) {
       alert(p.name + " turned down your offer (" + U.formatMoney(offer.amount) + " over " + offer.years + " yr" + (offer.years > 1 ? "s" : "") +
         ", asking " + U.formatMoney(asking) + "). Try sweetening the deal.");

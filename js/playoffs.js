@@ -222,12 +222,15 @@
         .sort(function (a, b) { return (b.potential - b.overall) - (a.potential - a.overall); });
       var best = roster[0];
       if (best) {
-        S.updatePlayer(best.id, { overall: U.clamp(best.overall + 1, best.overall, best.potential) });
+        var bestCap = S.overallCapForDivision(winnerTeam ? winnerTeam.division : null);
+        var bestNewOverall = U.clamp(best.overall + 1, best.overall, best.potential);
+        if (bestCap != null) bestNewOverall = Math.min(bestNewOverall, bestCap);
+        S.updatePlayer(best.id, { overall: bestNewOverall });
         if (window.PHLInbox) {
           window.PHLInbox.addNotification({
             type: "playoff",
             title: (winnerTeam ? winnerTeam.name : "A team") + " wins a series",
-            body: best.name + "'s Overall ticked up to " + best.overall + " after the series win.",
+            body: best.name + "'s Overall ticked up to " + bestNewOverall + " after the series win.",
           });
         }
       }
@@ -243,7 +246,13 @@
     if (idx === -1) return false;
     var p = S.getPlayer(playerId);
     if (p) {
-      S.updatePlayer(p.id, { overall: U.clamp(p.overall + 1, p.overall, p.potential) });
+      var newOverall = U.clamp(p.overall + 1, p.overall, p.potential);
+      if (p.teamId) {
+        var pTeam = S.getTeam(p.teamId);
+        var pCap = pTeam ? S.overallCapForDivision(pTeam.division) : null;
+        if (pCap != null) newOverall = Math.min(newOverall, pCap);
+      }
+      S.updatePlayer(p.id, { overall: newOverall });
     }
     pending.splice(idx, 1);
     S.updateSeason({ pendingGrowthPicks: pending });

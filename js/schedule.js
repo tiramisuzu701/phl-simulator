@@ -9,6 +9,14 @@
   var container = null;
   var view = { division: null };
 
+  // The regular season now spans 14 calendar weeks, but games are only
+  // played on 12 of them — weeks 10-11 are the mid-season trade-deadline
+  // break (see js/calendar.js runRegularWeek and js/state.js
+  // isTransactionWindowOpen). Games are labeled with their real calendar
+  // week number so the schedule reads naturally around the gap.
+  var PLAYING_WEEKS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14];
+  var BREAK_WEEKS = [10, 11];
+
   // Circle-method round robin. Returns an array of rounds; each round is an
   // array of [teamIdA, teamIdB] pairs. Handles odd team counts with a bye.
   function roundRobinRounds(teamIds) {
@@ -32,20 +40,24 @@
     return rounds;
   }
 
-  // Builds exactly `weeksCount * gamesPerWeek` round-robin "rounds" for a
-  // division (repeating/cycling the round-robin as many times as needed,
-  // alternating home/away each full cycle for fairness), then chunks them
-  // into weeks so every team plays exactly gamesPerWeek games per week —
-  // e.g. Pro (2 games/wk x 12wk = 24 games), Contender/Prospect (3/wk x
-  // 12wk = 36 games). An odd team count still gets a bye each round (see
-  // roundRobinRounds), so a team can occasionally fall short of the exact
-  // total — a known, documented limitation, not a bug.
-  function buildDivisionSchedule(div, weeksCount) {
+  // Builds exactly `playingWeeks.length * gamesPerWeek` round-robin "rounds"
+  // for a division (repeating/cycling the round-robin as many times as
+  // needed, alternating home/away each full cycle for fairness), then
+  // chunks them into weeks so every team plays exactly gamesPerWeek games
+  // per week — e.g. Pro (2 games/wk x 12wk = 24 games), Contender/Prospect
+  // (3/wk x 12wk = 36 games). Each chunk is labeled with the real calendar
+  // week number from `playingWeeks` (skipping the week 10-11 trade-deadline
+  // break — see PLAYING_WEEKS above) rather than a plain sequential index.
+  // An odd team count still gets a bye each round (see roundRobinRounds),
+  // so a team can occasionally fall short of the exact total — a known,
+  // documented limitation, not a bug.
+  function buildDivisionSchedule(div, playingWeeks) {
     var teams = S.getTeams(div.id);
     if (teams.length < 2) return [];
     var ids = teams.map(function (t) { return t.id; });
     var rounds = roundRobinRounds(ids);
     var gamesPerWeek = div.gamesPerWeek || 2;
+    var weeksCount = playingWeeks.length;
     var totalRoundsNeeded = weeksCount * gamesPerWeek;
 
     var flatRounds = [];
@@ -68,7 +80,7 @@
           games.push({
             id: U.uid("game"),
             divisionId: div.id,
-            week: w + 1,
+            week: playingWeeks[w],
             homeTeamId: home,
             awayTeamId: away,
             played: false,
@@ -84,11 +96,14 @@
   }
 
   function generateSeasonSchedule() {
-    var settings = S.getSettings();
-    var weeksCount = settings.regularSeasonWeeks || 12;
+    // Snapshot each team's just-finished regular season W-L-OTL record for
+    // next season's performance-scaled salary cap (js/state.js
+    // capForTeam) before resetTeamRecords() wipes it for the new season.
+    S.snapshotTeamRecordsForCap();
+
     var schedule = [];
     S.getDivisions().forEach(function (div) {
-      schedule = schedule.concat(buildDivisionSchedule(div, weeksCount));
+      schedule = schedule.concat(buildDivisionSchedule(div, PLAYING_WEEKS));
     });
 
     S.resetTeamRecords();
@@ -247,9 +262,12 @@
 
     var weeks = divisionWeeks(div);
     var weekNums = Object.keys(weeks).map(Number).sort(function (a, b) { return a - b; }); // Week 1 first, latest week at the bottom
+
+    html += '<div class="schedule-layout">';
+    html += renderPreviousWeekPanel(div, weeks, weekNums);
     html += '<div class="schedule-list">';
     weekNums.forEach(function (wn) {
-      html += '<div class="week-block"><h4>Week ' + wn + "</h4>";
+      html += '<div class="week-block"><h4>Week ' + wn + (BREAK_WEEKS.indexOf(wn) !== -1 ? ' <span class="muted small">(Trade Deadline Break)</span>' : "") + "</h4>";
       weeks[wn].forEach(function (g) {
         var home = S.getTeam(g.homeTeamId);
         var away = S.getTeam(g.awayTeamId);
@@ -264,10 +282,44 @@
       });
       html += "</div>";
     });
-    html += "</div>";
+    html += "</div>"; // .schedule-list
+    html += "</div>"; // .schedule-layout
 
     container.innerHTML = html;
     wireEvents();
+  }
+
+  // "Previous Week" panel — a quick, at-a-glance look at how the last
+  // *completed* week went for this division (the user's team highlighted),
+  // sitting next to the full schedule so there's no need to scroll to find
+  // it. Skips weeks with no games at all (e.g. before any week has been
+  // played, or the trade-deadline break weeks, which never get games).
+  function renderPreviousWeekPanel(divisionId, weeks, weekNums) {
+    var completedWeeks = weekNums.filter(function (wn) {
+      return weeks[wn].length && weeks[wn].every(function (g) { return g.played; });
+    });
+    var lastWeek = completedWeeks.length ? completedWeeks[completedWeeks.length - 1] : null;
+    var myTeamId = S.getFranchise().teamId;
+
+    var html = '<div class="previous-week-panel">';
+    if (lastWeek == null) {
+      html += "<h3>Previous Week</h3><p class=\"muted small\">No completed weeks yet for this division.</p>";
+      html += "</div>";
+      return html;
+    }
+    html += "<h3>Previous Week — Week " + lastWeek + "</h3>";
+    weeks[lastWeek].forEach(function (g) {
+      var home = S.getTeam(g.homeTeamId);
+      var away = S.getTeam(g.awayTeamId);
+      var involvesMe = g.homeTeamId === myTeamId || g.awayTeamId === myTeamId;
+      html += '<div class="game-row" style="' + (involvesMe ? "border-left:2px solid var(--glow-1);padding-left:0.4rem;" : "") + '">';
+      html += '<span class="game-team">' + U.escapeHtml(away ? away.abbr : "?") + "</span>";
+      html += '<span class="game-score">' + g.awayScore + " - " + g.homeScore + (g.wentToOT ? " OT" : "") + "</span>";
+      html += '<span class="game-team">' + U.escapeHtml(home ? home.abbr : "?") + "</span>";
+      html += "</div>";
+    });
+    html += "</div>";
+    return html;
   }
 
   function wireEvents() {

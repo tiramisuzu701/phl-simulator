@@ -543,6 +543,16 @@ input:focus, select:focus {
 .pill-accent { border-color: var(--glow-1); color: #b9c8ff; font-weight: 600; box-shadow: 0 0 10px -6px var(--glow-1-soft); }
 .pill-warn { border-color: var(--warning); color: var(--serious); }
 .pill-clinch { border-color: var(--good); color: var(--good); font-weight: 600; box-shadow: 0 0 10px -6px rgba(47, 206, 106, 0.5); }
+.pill-loss { border-color: var(--critical); color: var(--critical); font-weight: 600; }
+
+/* ---------- Dashboard "at a glance" hub ---------- */
+.dashboard-hub-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+.hub-section h4 { margin: 0 0 0.4rem; font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.03em; }
+.form-pills { display: flex; gap: 0.3rem; flex-wrap: wrap; }
 
 .tab-strip { display: flex; gap: 0.4rem; margin-bottom: 1rem; flex-wrap: wrap; }
 .chip {
@@ -568,6 +578,22 @@ input:focus, select:focus {
 .filter-bar select { min-width: 140px; }
 
 /* ---------- Schedule ---------- */
+.schedule-layout { display: grid; grid-template-columns: 300px 1fr; gap: 1rem; align-items: start; }
+.previous-week-panel {
+  background: linear-gradient(180deg, var(--surface-1), var(--surface-2));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.85rem 1rem;
+  box-shadow: var(--shadow-lift);
+  position: sticky;
+  top: 0.75rem;
+}
+.previous-week-panel h3 { margin: 0 0 0.6rem; font-size: 1rem; }
+.previous-week-panel .game-row { font-size: 0.85rem; }
+@media (max-width: 860px) {
+  .schedule-layout { grid-template-columns: 1fr; }
+  .previous-week-panel { position: static; }
+}
 .schedule-list { display: grid; gap: 0.75rem; }
 .week-block {
   background: linear-gradient(180deg, var(--surface-1), var(--surface-2));
@@ -910,3 +936,49 @@ input[type="color"] { padding: 0.25rem; height: 2.4rem; cursor: pointer; }
   transition: box-shadow 0.15s ease, transform 0.12s ease, border-color 0.15s ease;
 }
 .stat-tile:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift), 0 0 20px -12px var(--glow-1-soft); }
+
+/* ---------- Toast notifications (js/toast.js) ---------- */
+.toast-stack {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 4000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 360px;
+  pointer-events: none;
+}
+.toast {
+  background: linear-gradient(180deg, var(--surface-1), var(--surface-2));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  box-shadow: var(--shadow-lift), 0 0 20px -8px var(--glow-1-soft);
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  opacity: 0;
+  transform: translateX(16px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: auto;
+}
+.toast-in { opacity: 1; transform: translateX(0); }
+.toast-hide { opacity: 0; transform: translateX(16px); }
+.toast-message { flex: 1; white-space: pre-line; line-height: 1.4; }
+.toast-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1.05rem;
+  line-height: 1;
+  padding: 0;
+  flex-shrink: 0;
+}
+.toast-close:hover { color: var(--text-primary); }
+@media (max-width: 480px) {
+  .toast-stack { left: 1rem; right: 1rem; max-width: none; }
+}

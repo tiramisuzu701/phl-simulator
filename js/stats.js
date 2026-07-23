@@ -148,6 +148,16 @@
     if (growth <= 0) growth = 1; // any real development window guarantees at least +1
 
     p.overall = U.clamp(p.overall + growth, p.overall, p.potential);
+    // Currently-rostered players can't grow past their division's overall
+    // cutoff (see js/state.js overallCapForDivision) — a free agent has no
+    // team/division context yet, so their growth stays uncapped here; the
+    // cutoff instead blocks them at the moment they'd be signed into a
+    // capped division (see js/contracts.js sendOffer).
+    if (p.teamId) {
+      var team = S.getTeam(p.teamId);
+      var cap = team ? S.overallCapForDivision(team.division) : null;
+      if (cap != null) p.overall = Math.min(p.overall, cap);
+    }
     p.attributes = U.deriveAttributes(p.overall, p.position, p.archetype);
   }
 

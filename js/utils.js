@@ -321,14 +321,40 @@
     return clamp(0.85 + 0.12 * (tier - 1), 0.7, 1.5);
   }
 
+  // Stable (non-random-per-render) hash of a string into [0, 1), used below
+  // to give each player a fixed "negotiating personality" instead of their
+  // asking price flickering every re-render.
+  function hashUnit(str) {
+    var h = 0;
+    for (var i = 0; i < str.length; i++) {
+      h = (h << 5) - h + str.charCodeAt(i);
+      h |= 0;
+    }
+    return (Math.abs(h) % 10000) / 10000;
+  }
+
+  // Most players ask close to their "true" computed value, but a real
+  // negotiation has outliers — some players lowball themselves for
+  // security, others swing for the fences. ~12% chance a player
+  // undersells themselves (0.62-0.85x), ~12% oversells (1.15-1.50x), and
+  // the rest fall in a mild 0.92-1.08x band. Deterministic per player.
+  function askingQuirkFactor(player) {
+    var u = hashUnit(String(player.id) + ":quirk");
+    if (u < 0.12) return 0.62 + hashUnit(String(player.id) + ":quirk2") * 0.23;
+    if (u < 0.24) return 1.15 + hashUnit(String(player.id) + ":quirk3") * 0.35;
+    return 0.92 + hashUnit(String(player.id) + ":quirk4") * 0.16;
+  }
+
   // A player's asking price to re-sign (or to sign as a free agent): the
   // Overall/Potential baseline, adjusted for how they've actually performed
-  // this season and which division's paying. Allowed to run a bit above the
-  // normal salary ceiling for a bona fide breakout performance.
+  // this season, which division's paying, and the player's own fixed
+  // negotiating quirk (see askingQuirkFactor — some players under/oversell
+  // themselves). Allowed to run a bit above the normal salary ceiling for a
+  // bona fide breakout performance or a confident overselling outlier.
   function contractAskingPrice(player, divisionTier) {
     var base = salaryAsking(player.overall, player.potential);
-    var price = base * performanceFactor(player) * divisionTierFactor(divisionTier);
-    price = clamp(price, SALARY_MIN, SALARY_MAX * 1.6);
+    var price = base * performanceFactor(player) * divisionTierFactor(divisionTier) * askingQuirkFactor(player);
+    price = clamp(price, SALARY_MIN, SALARY_MAX * 1.8);
     return Math.round(price / 500) * 500;
   }
 

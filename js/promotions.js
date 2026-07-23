@@ -94,11 +94,16 @@
         var newSalary = fee; // same valuation formula drives both
         var totalCost = fee + newSalary;
         var affordable = totalCost <= space;
+        var withinCap = S.meetsOverallCap(p.overall, team.division);
         html += "<tr><td>" + U.escapeHtml(p.name) + "</td><td>" + p.position + "</td><td>" + U.escapeHtml(p.archetype || "") + "</td><td><strong>" + p.overall + "</strong></td><td>" + p.potential + "</td>";
         html += "<td>" + U.escapeHtml(pt ? pt.name : "?") + " <span class=\"muted\">(" + U.escapeHtml(S.getDivision(pt.division).name) + ")</span></td>";
         html += "<td>" + U.formatMoney(newSalary) + "</td><td>" + U.formatMoney(fee) + "</td>";
         if (!isOffseasonWindow()) {
           html += '<td><span class="pill pill-warn">Off-season only</span></td></tr>';
+        } else if (p.nmc) {
+          html += '<td><span class="pill pill-warn" title="No-Movement Clause">NMC protected</span></td></tr>';
+        } else if (!withinCap) {
+          html += '<td><span class="pill pill-warn" title="Above this division\'s overall cutoff">Exceeds overall cutoff</span></td></tr>';
         } else if (!affordable) {
           html += '<td><span class="pill pill-warn" title="Needs ' + U.formatMoney(totalCost) + ' in cap space (salary + fee)">Not enough cap</span></td></tr>';
         } else {
@@ -157,6 +162,15 @@
     if (!S.wouldMeetRosterMinimum(fromTeamId, [playerId])) {
       alert("Calling up " + player.name + " would drop " + (fromTeam ? fromTeam.name : "their current team") +
         " below the required " + S.ROSTER_MIN.total + "-player roster minimum — the move can't go through.");
+      return false;
+    }
+    if (player.nmc) {
+      alert(player.name + " has a No-Movement Clause and can't be moved while it's active.");
+      return false;
+    }
+    if (!S.meetsOverallCap(player.overall, toTeam.division)) {
+      alert(player.name + " (" + player.overall + " OVR) is above the " + S.getDivision(toTeam.division).name + " division's " +
+        S.overallCapForDivision(toTeam.division) + " overall cutoff and can't be called up there.");
       return false;
     }
     var fee = callUpFee(player);

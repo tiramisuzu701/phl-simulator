@@ -47,6 +47,7 @@
 
         var candidates = S.getFreeAgents().filter(function (p) {
           if (!isEligible(p, team.division)) return false;
+          if (!S.meetsOverallCap(p.overall, team.division)) return false;
           var asking = U.contractAskingPrice(p, division ? division.tier : null);
           if (asking > space) return false;
           return neededPos ? p.position === neededPos : counts[p.position] < 4; // depth cap when no urgent need
@@ -134,6 +135,7 @@
   function aiRunTrades() {
     var Trades = window.PHLTrades;
     if (!Trades) return [];
+    if (!S.isTransactionWindowOpen()) return []; // deadline locked — see js/state.js isTransactionWindowOpen
     var franchiseTeamId = (S.getFranchise() || {}).teamId;
     var completed = [];
     S.getDivisions().forEach(function (div) {
@@ -189,6 +191,7 @@
     var Trades = window.PHLTrades;
     var Inbox = window.PHLInbox;
     if (!Trades || !Inbox) return [];
+    if (!S.isTransactionWindowOpen()) return []; // deadline locked — see js/state.js isTransactionWindowOpen
     // Don't pile up offers — cap how many unresolved ones can be pending.
     var pendingOffers = S.getNotifications().filter(function (n) { return n.type === "trade-offer"; });
     if (pendingOffers.length >= 3) return [];

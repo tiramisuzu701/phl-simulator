@@ -13,24 +13,55 @@
     return b.overall - a.overall;
   }
 
+  // Weighted-random pick of `n` players out of `pool` without replacement,
+  // favoring higher overall but not exclusively — used to give AI teams a
+  // rotating lineup outside the playoffs instead of always dressing the
+  // same strict best-available group every single game (see
+  // pickLineupGroup below). Weight grows steeply with overall so the gap
+  // between a 90 and a 60 overall is still huge, but a bench player still
+  // has a real (if small) shot at getting picked over a marginally better
+  // teammate on any given night.
+  function weightedRotationPick(pool, n) {
+    var remaining = pool.slice();
+    var picked = [];
+    for (var i = 0; i < n && remaining.length; i++) {
+      var chosen = U.weightedPick(remaining.map(function (p) {
+        return { item: p, weight: Math.pow(Math.max(1, p.overall), 1.8) };
+      }));
+      if (!chosen) break;
+      picked.push(chosen);
+      remaining = remaining.filter(function (p) { return p.id !== chosen.id; });
+    }
+    return picked;
+  }
+
   // Picks `count` players at `position` for the active lineup. If the user
   // has manually flagged enough players as starters at that position (see
-  // the Players tab), those are used (best-overall-first among them);
-  // otherwise this falls back to simply taking the best players available
-  // at that position, exactly as before. AI-managed teams never set the
-  // `starter` flag, so they always use the fallback automatically.
-  function pickLineupGroup(roster, position, count) {
+  // the Players tab), those are used (best-overall-first among them).
+  // Otherwise: a human-managed team (or any team during the playoffs)
+  // falls back to simply taking the best players available at that
+  // position, exactly as before. An AI-managed team outside the playoffs
+  // instead rotates through its depth with a weighted random pick — AI-managed
+  // teams never set the `starter` flag, so they always hit this path when
+  // it isn't the playoffs, giving bench players real (if less frequent)
+  // playing time instead of the same lineup every week.
+  function pickLineupGroup(roster, position, count, teamId) {
     var atPos = roster.filter(function (p) { return p.position === position; });
     var starters = atPos.filter(function (p) { return !!p.starter; }).sort(byOverallDesc);
     if (starters.length >= count) return starters.slice(0, count);
+    var phase = (S.getSeason() || {}).phase;
+    var rotate = teamId && !S.isManagedTeam(teamId) && phase !== "playoffs";
+    if (rotate && atPos.length > count) {
+      return weightedRotationPick(atPos, count);
+    }
     return atPos.sort(byOverallDesc).slice(0, count);
   }
 
   function getActiveLineup(teamId) {
     var roster = S.getRoster(teamId);
-    var forwards = pickLineupGroup(roster, "F", 2);
-    var defenders = pickLineupGroup(roster, "D", 2);
-    var goalies = pickLineupGroup(roster, "G", 1);
+    var forwards = pickLineupGroup(roster, "F", 2, teamId);
+    var defenders = pickLineupGroup(roster, "D", 2, teamId);
+    var goalies = pickLineupGroup(roster, "G", 1, teamId);
     var goalie = goalies.length ? goalies[0] : null;
     return { forwards: forwards, defenders: defenders, goalie: goalie };
   }
