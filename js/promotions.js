@@ -48,7 +48,7 @@
     if (!container) return;
     var franchise = S.getFranchise();
     if (!franchise || !franchise.teamId) {
-      container.innerHTML = '<div class="panel-header"><h2>Promotions</h2></div><p class="muted">Pick your team on the Startup Draft tab first — Promotions only works for the team you manage.</p>';
+      container.innerHTML = '<div class="panel-header"><h2>Promotions</h2></div><p class="muted">Set up your franchise on the <a href="create-save.html">Create Save</a> page first — Promotions only works for the team you manage.</p>';
       return;
     }
     selectedTeamId = franchise.teamId;

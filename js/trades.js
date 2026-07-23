@@ -42,7 +42,7 @@
     if (!container) return;
     var franchise = S.getFranchise();
     if (!franchise || !franchise.teamId) {
-      container.innerHTML = '<div class="panel-header"><h2>Trades</h2></div><p class="muted">Pick your team on the Startup Draft tab first — you can only propose trades for the team you GM.</p>';
+      container.innerHTML = '<div class="panel-header"><h2>Trades</h2></div><p class="muted">Set up your franchise on the <a href="create-save.html">Create Save</a> page first — you can only propose trades for the team you GM.</p>';
       return;
     }
     var myTeamId = franchise.teamId;

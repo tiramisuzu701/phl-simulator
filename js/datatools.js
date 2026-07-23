@@ -23,8 +23,14 @@
     html += "</div>";
 
     html += '<div class="form-card">';
+    html += "<h3>Start a New Save</h3>";
+    html += '<p class="muted">Wipe the current league and go pick a division/team (or create an Expansion Franchise) from scratch on the Create Save page.</p>';
+    html += '<a class="btn btn-primary" href="create-save.html">Start a New Save&hellip;</a>';
+    html += "</div>";
+
+    html += '<div class="form-card">';
     html += "<h3>Reset</h3>";
-    html += '<p class="muted">Wipe the current league and restore the starter PHL divisions/teams with an empty player database.</p>';
+    html += '<p class="muted">Wipe the current league and restore the starter PHL divisions/teams with no franchise chosen yet &mdash; you\'ll be sent to Create Save to pick one.</p>';
     html += '<button class="btn btn-danger" data-action="reset">Reset to Starter Data</button>';
     html += "</div>";
 
@@ -44,7 +50,7 @@
     container.querySelector('[data-action="reset"]').addEventListener("click", function () {
       if (confirm("Reset everything to the starter PHL league? This cannot be undone (export first if you want to keep it).")) {
         S.resetToStarter();
-        if (window.PHLApp) window.PHLApp.refreshAll();
+        window.location.href = "create-save.html";
       }
     });
     container.querySelector('[data-action="import"]').addEventListener("click", function () {

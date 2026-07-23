@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Create Save — PHL Franchise Simulator</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="wizard-page">
+    <div class="wizard-shell">
+      <div class="wizard-header">
+        <span class="wizard-brand-mark">PHL</span>
+        <h1>Create Save</h1>
+        <p>Pick who you'll manage. This choice is made once, right now &mdash; it can't be changed mid-save.</p>
+      </div>
+      <div id="wizard-root"></div>
+    </div>
+  </div>
+
+  <!-- Plain scripts (no ES modules), same pattern as index.html — this page
+       only needs enough of the stack to read/write the shared save. -->
+  <script src="js/utils.js"></script>
+  <script src="js/starterData.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/createSave.js"></script>
+</body>
+</html>

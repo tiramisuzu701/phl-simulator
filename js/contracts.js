@@ -36,7 +36,7 @@
     if (!container) return;
     var franchise = S.getFranchise();
     if (!franchise || !franchise.teamId) {
-      container.innerHTML = '<div class="panel-header"><h2>Contracts &amp; Cap</h2></div><p class="muted">Pick your team on the Startup Draft tab first — you can only manage contracts for the team you GM. (Want to browse another team\'s roster? See the Teams tab.)</p>';
+      container.innerHTML = '<div class="panel-header"><h2>Contracts &amp; Cap</h2></div><p class="muted">Set up your franchise on the <a href="create-save.html">Create Save</a> page first — you can only manage contracts for the team you GM. (Want to browse another team\'s roster? See the Teams tab.)</p>';
       return;
     }
     selectedTeamId = franchise.teamId;

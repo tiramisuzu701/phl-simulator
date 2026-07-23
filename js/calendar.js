@@ -49,8 +49,6 @@
   // caught the moment it would block them.
   function checkBlocked() {
     if (!isSetupComplete()) return "Finish the Startup Draft and pick your team first.";
-    var ed = S.getExpansionDraft();
-    if (ed && ed.status === "active") return "Finish your Expansion Draft picks first (Teams tab).";
     var AI = window.PHLAIManager;
     if (AI) {
       var cap = AI.enforceCapForAllTeams();

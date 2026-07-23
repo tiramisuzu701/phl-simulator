@@ -172,11 +172,21 @@
       S.save();
       alert("Progress saved. Your league lives in this browser — use Data Tools to export a portable backup any time.");
     });
-    // New/fresh saves (no GM team chosen, startup draft not finished yet)
-    // open straight to the Startup Draft tab so it's the natural first step.
+    // A save with no franchise team chosen yet (a brand-new save, or one
+    // reset via Data Tools) has nothing for the app to show — division/team
+    // (and, optionally, an Expansion Franchise) are picked once, up front,
+    // on the standalone Create Save page. Redirect there immediately rather
+    // than showing an empty in-app picker.
     var franchise = S.getFranchise();
+    if (!franchise || !franchise.teamId) {
+      window.location.href = "create-save.html";
+      return;
+    }
+    // Franchise is set but the one-time Startup Draft hasn't finished yet
+    // (e.g. the user left mid-draft) — land back on that tab so it's the
+    // natural next step.
     var startupDraft = S.getStartupDraft();
-    var needsSetup = (!franchise || !franchise.teamId) || (startupDraft && startupDraft.status !== "complete");
+    var needsSetup = startupDraft && startupDraft.status !== "complete";
     showTab(needsSetup ? "startup" : "dashboard");
   }
 

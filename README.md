@@ -11,9 +11,9 @@ fork, host on GitHub Pages, or just double-click `index.html` and play.
 
 ## Quick start
 
-**Option 1 — just open it.** Double-click `index.html`. Everything runs in
-your browser; your league is saved to that browser's local storage as you
-play.
+**Option 1 — just open it.** Double-click `create-save.html` (not
+`index.html` — see **Starting a save** below). Everything runs in your
+browser; your league is saved to that browser's local storage as you play.
 
 **Option 2 — host it.** Push this repo to GitHub and enable **GitHub
 Pages** (Settings → Pages → Deploy from branch → `main` / root). No build
@@ -21,6 +21,28 @@ step needed — it's ready as-is.
 
 **Option 3 — local server** (useful for development): from this folder run
 `python3 -m http.server 8000` and open `http://localhost:8000`.
+
+## Starting a save
+
+`create-save.html` is a standalone wizard — separate from the main app —
+where you make one decision up front, before anything else happens:
+
+- **Manage an Existing Team** — pick a division, then a team already in the
+  league. The Startup Draft runs **8 rounds per phase**.
+- **Create an Expansion Franchise** — pick a division and give your brand-new
+  team a name and abbreviation; it joins the league alongside the existing
+  teams and becomes the team you manage. The Startup Draft runs **6 rounds
+  per phase** instead of 8, since one extra team is now drawing from the
+  same fixed-size real player pool.
+
+Submitting the wizard writes that choice into your save and sends you to
+`index.html` to actually play — the round count you picked applies for the
+rest of that save's Startup Draft; it isn't something you can change
+mid-save. If a save is already in progress, visiting `create-save.html`
+again warns you first (Continue This Save / Start a Fresh Save Instead)
+before it lets you overwrite anything. `index.html` itself will bounce you
+back to `create-save.html` automatically any time it finds no franchise
+team chosen yet (a brand-new save, or one wiped via **Data Tools → Reset**).
 
 ## What's included
 
@@ -97,13 +119,15 @@ step needed — it's ready as-is.
   Week** to simulate the whole current round for you — mix and match
   freely, since Advance Week only fills in whatever a round's series
   haven't already decided on their own.
-- **Startup Draft** — a one-time draft at the start of every save. Pick
-  the division and team you want to GM, then the real PHL player pool
-  (baked into the site — see below) is drafted in three cascading phases:
-  **Pro** drafts first from the entire pool (8 rounds, snake order), then
-  **Contender** drafts from whoever Pro left behind (8 rounds), then
-  **Prospect** gets whatever's left after that (8 rounds). Draft order for
-  every phase comes from a single random shuffle made once when you start.
+- **Startup Draft** — a one-time draft at the start of every save, using
+  the division/team (or Expansion Franchise) you chose on the **Create
+  Save** page. The real PHL player pool (baked into the site — see below)
+  is drafted in three cascading phases: **Pro** drafts first from the
+  entire pool, snake order, then **Contender** drafts from whoever Pro left
+  behind, then **Prospect** gets whatever's left after that. Each phase
+  runs 8 rounds normally, or 6 if your save includes an Expansion
+  Franchise (see **Starting a save** above). Draft order for every phase
+  comes from a single random shuffle made once when you start.
   AI teams draft best-player-available while making sure they cover a
   viable lineup (at least 2F/2D/1G) before chasing extra depth, so a
   clearly elite player reliably goes in the first phase it's eligible
@@ -112,7 +136,7 @@ step needed — it's ready as-is.
   starters/bench once it's done — the sim automatically falls back to
   best-available for any position you haven't manually set. Because the
   real player pool has a fixed number of players, it can run out before
-  every team completes all 8 rounds, especially deep into the Prospect
+  every team completes every round, especially deep into the Prospect
   phase — teams just end up with whatever roster size the pool allowed.
 - **Promotions (off-season call-ups)** — during the off-season, a manager
   can permanently call up a rostered player from any strictly lower-tier
@@ -185,8 +209,8 @@ The whole season runs on one clock, advanced one week at a time by the
    generates a new breakout-rookie class, and repeats indefinitely.
 
 Advance Week is disabled (with an on-screen reason) whenever it can't
-safely proceed: the Startup Draft hasn't been finished yet, an Expansion
-Draft is currently active, or your own team is over the salary cap.
+safely proceed: the Startup Draft hasn't been finished yet, or your own
+team is over the salary cap.
 
 ## The real PHL player pool
 
@@ -206,29 +230,15 @@ with randomized placeholder players so you can test-drive the simulator
 before entering real data.
 
 **+ Add Team** on the Teams tab is a plain commissioner/league-building
-tool — add a bare team to any division at any point, with no draft and no
-franchise switch. It joins that division's standings/schedule the next
-time the schedule regenerates, and playoff qualification is always "top N
-by standings," so it just misses the postseason if it finishes outside the
-line, like anyone else.
-
-## Expansion Franchise
-
-**+ Add Expansion Franchise** (next to + Add Team on the Teams tab) is the
-in-game way to grow the league: give it a name, abbreviation, and division,
-and it immediately becomes **your new managed team** — the team you were
-managing before switches to AI control. (A save only ever has one
-user-managed team at a time.)
-
-Creating an expansion franchise kicks off an **Expansion Draft**: a
-scaled-down, 6-round version of the Startup Draft (vs. 8 rounds normally),
-drafting from the league's current free-agent pool rather than the
-one-time startup pool. Advance Week is blocked while an Expansion Draft is
-active. If the free-agent pool is too thin to fill all 6 rounds (most
-likely if you expand very early in a save, right after the Startup Draft
-has just exhausted the player pool), an **End Draft Now** button lets you
-stop early with whatever roster you've drafted so far and unblock Advance
-Week.
+tool — add a bare, AI-controlled team to any division at any point. It
+does **not** change who you manage (that's an Expansion Franchise's job —
+see **Starting a save** above, since that's a save-creation-time choice
+now, not something you do mid-save from this tab). A team added here joins
+that division's standings/schedule the next time the schedule regenerates,
+and playoff qualification is always "top N by standings," so it just
+misses the postseason if it finishes outside the line, like anyone else.
+Teams created as an Expansion Franchise at save creation show a small
+**Expansion** badge on their team card here, purely informational.
 
 ## Restricted team management
 
@@ -309,7 +319,11 @@ for the shape, `js/state.js` for the accessors):
   teams by standings are playoff-eligible; `playoff.byes` is how many skip
   straight to the main bracket (the rest play a Wild Card round for the
   remaining spot(s)).
-- `teams` — `{ id, name, abbr, division, wins, losses, otLosses, gf, ga, points }`.
+- `teams` — `{ id, name, abbr, division, wins, losses, otLosses, gf, ga, points,
+  isExpansionTeam }`. `isExpansionTeam` is only ever set (`true`) on a team
+  created through the Create Save wizard's Expansion Franchise path — it's
+  purely informational (drives the "Expansion" badge on the Teams tab) and
+  nothing else reads it.
 - `players` — `{ id, name, position (F/D/G), archetype, overall, potential,
   attributes: { offense, defense, goaltending } (derived from overall +
   position + archetype, not hand-entered), age & retirementAge (hidden,
@@ -328,15 +342,14 @@ for the shape, `js/state.js` for the accessors):
   `entryDraftDoneThisCycle` flag from before the recurring Entry Draft was
   removed — harmless, safe to ignore.)
 - `franchise` — `{ divisionId, teamId }`, the one team the human is
-  currently GM of. Set via the Startup Draft tab initially; can change
-  later if an Expansion Franchise is created (see above), which always
-  switches management to the new team.
+  currently GM of. Set exactly once, up front, by the Create Save wizard
+  (`create-save.html` / `js/createSave.js`) — nothing in the main app
+  changes it mid-save. `index.html` redirects to `create-save.html`
+  whenever it finds `teamId` still `null`.
 - `startupDraft` — `{ status, phase, phaseIndex, masterOrder,
   phaseTeamOrder, pickIndexInPhase, roundsPerPhase, picks }`, the one-time
-  cascading draft's state (see js/startupDraft.js).
-- `expansionDraft` — `null` normally; while an Expansion Franchise is being
-  drafted, `{ status, teamId, round, totalRounds, picks }` (see
-  js/expansion.js). Advance Week is blocked whenever `status === "active"`.
+  cascading draft's state (see js/startupDraft.js). `roundsPerPhase` is
+  copied from `settings.startupDraftRounds` the moment the draft starts.
 - `promotions` — array of `{ id, season, fromTeamId, toTeamId, playerId,
   fee }` log entries, one per completed off-season call-up (both
   human-initiated and AI-initiated — see js/promotions.js and
@@ -344,10 +357,10 @@ for the shape, `js/state.js` for the accessors):
 - `trades` — array of `{ id, season, teamAId, teamBId, playersToA,
   playersToB }` log entries, one per completed trade (see js/trades.js).
 - `settings` — roster max, active lineup shape, off-season/regular-season
-  week counts, per-division games-per-week, startup/expansion draft round
-  counts, points for a win/OT loss, playoff teams per division,
-  decline/retirement age range, rookies-per-season, rookie/Contender-
-  eligibility odds.
+  week counts, per-division games-per-week, `startupDraftRounds` (8 or 6 —
+  set once by the Create Save wizard, see above), points for a win/OT
+  loss, playoff teams per division, decline/retirement age range,
+  rookies-per-season, rookie/Contender-eligibility odds.
 
 ## Notes on the simulation
 

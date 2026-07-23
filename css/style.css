@@ -642,3 +642,66 @@ input, select {
   .top-header { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
   .form-grid { grid-template-columns: 1fr; }
 }
+
+/* ---------- Create Save wizard (standalone page, no sidebar shell) ---------- */
+.wizard-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 3rem 1rem 4rem;
+}
+.wizard-shell { width: 100%; max-width: 720px; }
+.wizard-header { text-align: center; margin-bottom: 1.75rem; }
+.wizard-brand-mark {
+  display: inline-block;
+  background: var(--series-blue);
+  color: white;
+  font-weight: 700;
+  padding: 0.4rem 0.7rem;
+  border-radius: 8px;
+  letter-spacing: 0.03em;
+  font-size: 0.95rem;
+  margin-bottom: 0.85rem;
+}
+.wizard-header h1 { margin: 0 0 0.35rem; font-size: 1.5rem; }
+.wizard-header p { margin: 0; color: var(--text-secondary); }
+
+.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+}
+.mode-card {
+  text-align: left;
+  background: var(--surface-1);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-family: inherit;
+}
+.mode-card:hover { border-color: var(--series-blue); }
+.mode-card-selected { border-color: var(--series-blue); box-shadow: 0 0 0 1px var(--series-blue); }
+.mode-card h3 { margin: 0 0 0.35rem; font-size: 0.95rem; }
+.mode-card p { margin: 0; font-size: 0.82rem; color: var(--text-secondary); }
+
+.chip-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.25rem; }
+
+.draft-rounds-note {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.draft-rounds-note strong { color: var(--text-primary); }
+
+.wizard-footer { text-align: center; margin-top: 1.25rem; }

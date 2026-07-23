@@ -308,9 +308,10 @@
       // Chance a given breakout rookie is eligible for Contender (instead
       // of Prospect-only). Never eligible for Pro straight out of the gate.
       rookieContenderChance: 0.25,
-      // Startup Draft rounds vs. a later Expansion Draft's rounds.
+      // Startup Draft rounds — the Create Save wizard sets this to 6
+      // instead of 8 for a save that includes an Expansion Franchise (one
+      // extra team drafting from the same fixed real-player pool).
       startupDraftRounds: 8,
-      expansionDraftRounds: 6,
     },
     divisions: divisions,
     teams: teams,
@@ -342,7 +343,8 @@
       picks: [],
     },
     // The GM's chosen division/team for this save. Set once, at the very
-    // start, via the Startup Draft tab.
+    // start, on the standalone Create Save page (create-save.html) before
+    // the Startup Draft ever runs.
     franchise: {
       divisionId: null,
       teamId: null,
@@ -368,11 +370,5 @@
     // Player-for-player trades between two teams, initiated from the
     // Trades tab (see js/trades.js). Full history logged here.
     trades: [], // { id, season, teamAId, teamBId, playersToA, playersToB }
-    // A solo, single-team draft run whenever an Expansion Franchise is
-    // added mid-save (see js/expansion.js) — 6 rounds (vs. the Startup
-    // Draft's 8) picking from the current free-agent pool to build that
-    // one new team's roster from scratch. Null when no expansion draft is
-    // in progress.
-    expansionDraft: null, // { status, teamId, round, totalRounds, pool, picks }
   };
 })();

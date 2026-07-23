@@ -11,25 +11,19 @@
     container = el || container;
     if (!container) return;
 
-    if (window.PHLExpansion && window.PHLExpansion.isActive()) {
-      window.PHLExpansion.renderDraftUI(container);
-      return;
-    }
-
     var divisions = S.getDivisions().slice().sort(function (a, b) {
       return b.tier - a.tier;
     });
     var html = "";
     html += '<div class="panel-header"><h2>Divisions &amp; Teams</h2>' +
       '<div class="header-actions">' +
-      '<button class="btn" data-action="new-expansion">+ Add Expansion Franchise</button>' +
       '<button class="btn btn-primary" data-action="new-team">+ Add Team</button>' +
       "</div></div>";
-    html += '<p class="muted small">"+ Add Team" is a plain league-building tool (AI-controlled, for filling out divisions). ' +
-      '"+ Add Expansion Franchise" creates a new team AND hands you the GM keys — you\'ll draft its roster from scratch ' +
-      'and your current team goes to AI control. Click any team name to see its full roster and stats. Playoff cutoffs ' +
-      'are always "top N by standings," so a newly added team that finishes outside a division\'s playoff line just ' +
-      "misses out, same as any other team.</p>";
+    html += '<p class="muted small">"+ Add Team" is a plain league-building tool (AI-controlled, for filling out divisions) ' +
+      '— it does not change who you manage. Expansion Franchises are chosen once, at save creation (see the ' +
+      '<a href="create-save.html">Create Save</a> page), not added mid-save. Click any team name to see its full roster ' +
+      'and stats. Playoff cutoffs are always "top N by standings," so a newly added team that finishes outside a ' +
+      "division's playoff line just misses out, same as any other team.</p>";
 
     divisions.forEach(function (div) {
       var teams = S.getTeams(div.id).slice().sort(function (a, b) {
@@ -58,6 +52,7 @@
           html += '<span class="team-badge">' + U.escapeHtml(t.abbr) + '</span>';
           html += '<span class="team-name team-name-link" data-action="view-team" data-id="' + t.id + '" role="button" tabindex="0">' + U.escapeHtml(t.name) + '</span>';
           if (S.isManagedTeam(t.id)) html += '<span class="pill pill-accent">GM</span>';
+          if (t.isExpansionTeam) html += '<span class="pill" title="Created at save creation as an Expansion Franchise">Expansion</span>';
           html += '</div>';
           html += '<div class="team-card-stats">' +
             roster.length + ' players &middot; ' +
@@ -85,11 +80,6 @@
       b.addEventListener("click", function () {
         showForm(null);
       });
-    });
-    var newExpansion = container.querySelector('[data-action="new-expansion"]');
-    if (newExpansion) newExpansion.addEventListener("click", function () {
-      var panel = container.querySelector("#team-form-panel");
-      if (window.PHLExpansion) window.PHLExpansion.renderNewFranchiseForm(panel);
     });
     container.querySelectorAll('[data-action="view-team"]').forEach(function (b) {
       b.addEventListener("click", function () {

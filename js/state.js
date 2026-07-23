@@ -48,7 +48,6 @@
     if (!d.startupDraft) d.startupDraft = deepClone(starter.startupDraft);
     if (!d.promotions) d.promotions = [];
     if (!d.trades) d.trades = [];
-    if (d.expansionDraft === undefined) d.expansionDraft = null;
     for (var key in starter.settings) {
       if (!(key in d.settings)) d.settings[key] = starter.settings[key];
     }
@@ -109,6 +108,10 @@
   }
   function getSettings() {
     return data.settings;
+  }
+  function updateSettings(patch) {
+    Object.assign(data.settings, patch);
+    save();
   }
   function getDivisions() {
     return data.divisions;
@@ -324,21 +327,6 @@
     return entry;
   }
 
-  // ---------------- Expansion Draft (one-time per new expansion team) --
-  function getExpansionDraft() {
-    return data.expansionDraft;
-  }
-  function setExpansionDraft(ed) {
-    data.expansionDraft = ed;
-    save();
-  }
-  function updateExpansionDraft(patch) {
-    if (!data.expansionDraft) return null;
-    Object.assign(data.expansionDraft, patch);
-    save();
-    return data.expansionDraft;
-  }
-
   // Is this the team the human GM currently manages? Every action that
   // touches a roster/contract (sign, release, re-sign, lineup, promote)
   // should gate on this — other teams are AI-managed and read-only to the
@@ -373,6 +361,7 @@
     importFromObject: importFromObject,
     getData: getData,
     getSettings: getSettings,
+    updateSettings: updateSettings,
     getDivisions: getDivisions,
     getDivision: getDivision,
     getTeams: getTeams,
@@ -410,9 +399,6 @@
     addPromotion: addPromotion,
     getTrades: getTrades,
     addTrade: addTrade,
-    getExpansionDraft: getExpansionDraft,
-    setExpansionDraft: setExpansionDraft,
-    updateExpansionDraft: updateExpansionDraft,
     isManagedTeam: isManagedTeam,
   };
 })();

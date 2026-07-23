@@ -1,16 +1,22 @@
 /* PHL Franchise Simulator — one-time Startup Draft
  * Global namespace: window.PHLStartupDraft
  *
- * Runs once, at the very beginning of a save. After the GM picks a
- * division and team, the real PHL player pool (see startupPool in
- * starterData.js) is drafted in three cascading phases:
- *   1. Pro drafts from the FULL pool (8 rounds, snake order).
- *   2. Contender drafts from whatever Pro left behind (8 rounds, snake).
- *   3. Prospect drafts from whatever Contender left behind (8 rounds, snake).
+ * Runs once, at the very beginning of a save, AFTER create-save.html has
+ * already set the GM's division/team (and, if this save includes an
+ * Expansion Franchise, already added that team to the league too — see
+ * js/createSave.js). This module never picks the GM's team itself
+ * anymore; it just runs the draft. The real PHL player pool (see
+ * startupPool in starterData.js) is drafted in three cascading phases:
+ *   1. Pro drafts from the FULL pool (settings.startupDraftRounds, snake).
+ *   2. Contender drafts from whatever Pro left behind (same rounds, snake).
+ *   3. Prospect drafts from whatever Contender left behind (same rounds).
  * Anyone still undrafted after Prospect's phase becomes a normal free
  * agent. Pick order for every phase comes from a single random shuffle of
- * all teams, made once when the draft begins — each phase just filters
- * that master order down to its own division's teams.
+ * all teams (including a freshly added Expansion Franchise, if any), made
+ * once when the draft begins — each phase just filters that master order
+ * down to its own division's teams. Rounds are 8 for a normal save, or 6
+ * for a save that includes an Expansion Franchise (one extra team drawing
+ * from the same fixed-size real player pool).
  */
 (function () {
   "use strict";
@@ -31,7 +37,6 @@
   var POS_LABEL = { F: "Forward", D: "Defense", G: "Goalie" };
 
   var posFilter = "";
-  var setupDivisionChoice = null; // transient UI state for the GM-setup screen
 
   // ---------------- Helpers ----------------
   function shuffle(arr) {
@@ -101,7 +106,7 @@
   function startDraft() {
     var fr = S.getFranchise();
     if (!fr.teamId) {
-      alert("Pick your division and team first.");
+      alert("No franchise is set up for this save yet — head to Create Save first.");
       return;
     }
     var sd = S.getStartupDraft();
@@ -113,6 +118,10 @@
     sd.pickIndexInPhase = 0;
     sd.phase = null;
     sd.phaseTeamOrder = [];
+    // Rounds-per-phase is decided once, at save creation (6 rounds for a
+    // save with an Expansion Franchise, 8 otherwise — see
+    // js/createSave.js), and carried here from settings.
+    sd.roundsPerPhase = S.getSettings().startupDraftRounds || 8;
     S.updateStartupDraft(sd);
     advancePhase(sd);
   }
@@ -246,7 +255,7 @@
     var sd = S.getStartupDraft();
 
     if (!fr.teamId) {
-      renderSetupScreen();
+      renderNoFranchiseScreen();
       return;
     }
     if (sd.status === "not_started") {
@@ -268,61 +277,34 @@
     renderCompleteScreen(fr);
   }
 
-  function renderSetupScreen() {
-    var divisions = S.getDivisions().slice().sort(function (a, b) { return b.tier - a.tier; });
-    var divId = setupDivisionChoice || (divisions[0] && divisions[0].id);
-    var teams = S.getTeams(divId).slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
-
-    var html = '<div class="panel-header"><h2>Startup Draft — Choose Your Franchise</h2></div>';
-    html += '<div class="form-card">';
-    html += "<p>Pick the division and team you want to run. Once you confirm, the one-time Startup Draft " +
-      "populates every team in the league (including yours) from the real PHL player pool — Pro drafts first " +
-      "from the whole pool, then Contender drafts from what's left, then Prospect gets whatever remains.</p>";
-    html += '<div class="tab-strip">';
-    divisions.forEach(function (d) {
-      html += '<button class="chip' + (d.id === divId ? " chip-active" : "") + '" data-action="pick-division" data-id="' + d.id + '">' + U.escapeHtml(d.name) + "</button>";
-    });
-    html += "</div>";
-    html += '<div class="form-grid"><label>Team<select id="setup-team-select">';
-    teams.forEach(function (t) {
-      html += '<option value="' + t.id + '">' + U.escapeHtml(t.name) + "</option>";
-    });
-    html += "</select></label></div>";
-    html += '<div class="form-actions"><button class="btn btn-primary" data-action="confirm-franchise">Confirm & Continue</button></div>';
-    html += "</div>";
+  // Safety-net screen only — normally app.js redirects to create-save.html
+  // the moment it notices no franchise is set, so this shouldn't render in
+  // the ordinary flow. It exists in case someone lands here directly (e.g.
+  // a bookmarked URL, or a mid-navigation edge case).
+  function renderNoFranchiseScreen() {
+    var html = '<div class="panel-header"><h2>Startup Draft</h2></div>';
+    html += '<div class="empty-state"><p>This save doesn\'t have a franchise set up yet. Division/team (and, if you ' +
+      "want one, an Expansion Franchise) are chosen once, up front, on the Create Save page.</p>" +
+      '<a class="btn btn-primary" href="create-save.html">Go to Create Save</a></div>';
     container.innerHTML = html;
-
-    container.querySelectorAll('[data-action="pick-division"]').forEach(function (b) {
-      b.addEventListener("click", function () {
-        setupDivisionChoice = b.dataset.id;
-        render();
-      });
-    });
-    container.querySelector('[data-action="confirm-franchise"]').addEventListener("click", function () {
-      var teamSel = container.querySelector("#setup-team-select");
-      var teamId = teamSel && teamSel.value;
-      if (!teamId) { alert("Pick a team."); return; }
-      S.setFranchise(divId, teamId);
-      setupDivisionChoice = null;
-      render();
-      if (window.PHLApp) window.PHLApp.refresh();
-    });
   }
 
   function renderReadyScreen(fr) {
     var team = S.getTeam(fr.teamId);
     var div = S.getDivision(fr.divisionId);
+    var rounds = S.getSettings().startupDraftRounds || 8;
     var html = '<div class="panel-header"><h2>Startup Draft</h2></div>';
     html += '<div class="form-card">';
-    html += "<p>You're GM of <strong>" + U.escapeHtml(team ? team.name : "?") + "</strong> (" + U.escapeHtml(div ? div.name : "?") + ").</p>";
-    html += "<p class=\"muted\">The Startup Draft runs in three cascading phases, each 8 rounds in snake order " +
+    html += "<p>You're GM of <strong>" + U.escapeHtml(team ? team.name : "?") + "</strong> (" + U.escapeHtml(div ? div.name : "?") +
+      (team && team.isExpansionTeam ? " &middot; Expansion Franchise" : "") + ").</p>";
+    html += "<p class=\"muted\">The Startup Draft runs in three cascading phases, each " + rounds + " rounds in snake order " +
       "(pick order reverses every round): <strong>Pro</strong> drafts first from the full real-player pool, " +
       "then <strong>Contender</strong> drafts from whoever's left, then <strong>Prospect</strong> gets the rest. " +
       "Draft order for every phase is randomized once, right when you start. Undrafted players afterward become " +
       "regular free agents.</p>";
     html += '<div class="form-actions">';
     html += '<button class="btn btn-primary" data-action="begin-draft">Begin Startup Draft</button>';
-    html += '<button class="btn" data-action="change-team">Change Team</button>';
+    html += '<a class="btn" href="create-save.html">Start a Different Save</a>';
     html += "</div></div>";
     container.innerHTML = html;
 
@@ -330,10 +312,6 @@
       startDraft();
       render();
       if (window.PHLApp) window.PHLApp.refresh();
-    });
-    container.querySelector('[data-action="change-team"]').addEventListener("click", function () {
-      S.setFranchise(null, null);
-      render();
     });
   }
 
