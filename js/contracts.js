@@ -11,15 +11,17 @@
   function render(el) {
     container = el || container;
     if (!container) return;
-    var teams = S.getTeams().slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
-    if (!teams.length) {
-      container.innerHTML = '<div class="panel-header"><h2>Contracts &amp; Cap</h2></div><p class="muted">Add a team first.</p>';
+    var franchise = S.getFranchise();
+    if (!franchise || !franchise.teamId) {
+      container.innerHTML = '<div class="panel-header"><h2>Contracts &amp; Cap</h2></div><p class="muted">Pick your team on the Startup Draft tab first — you can only manage contracts for the team you GM. (Want to browse another team\'s roster? See the Teams tab.)</p>';
       return;
     }
-    if (!selectedTeamId || !teams.some(function (t) { return t.id === selectedTeamId; })) {
-      selectedTeamId = teams[0].id;
-    }
+    selectedTeamId = franchise.teamId;
     var team = S.getTeam(selectedTeamId);
+    if (!team) {
+      container.innerHTML = '<div class="panel-header"><h2>Contracts &amp; Cap</h2></div><p class="muted">Your managed team couldn\'t be found.</p>';
+      return;
+    }
     var cap = S.capForTeam(selectedTeamId);
     var used = S.capUsed(selectedTeamId);
     var space = S.capSpace(selectedTeamId);
@@ -27,11 +29,7 @@
     var roster = S.getRoster(selectedTeamId).slice().sort(function (a, b) { return b.overall - a.overall; });
 
     var html = '<div class="panel-header"><h2>Contracts &amp; Cap</h2></div>';
-    html += '<div class="filter-bar"><label>Team <select id="cap-team-select">';
-    teams.forEach(function (t) {
-      html += '<option value="' + t.id + '"' + (t.id === selectedTeamId ? " selected" : "") + ">" + U.escapeHtml(t.name) + "</option>";
-    });
-    html += "</select></label></div>";
+    html += '<p class="muted small">You can only manage contracts for the team you GM. Every other team signs, releases and re-signs on its own.</p>';
 
     html += '<div class="cap-summary-card" style="--accent:' + U.colorForId(team.id) + '">';
     html += '<div class="team-card-head"><span class="team-badge">' + U.escapeHtml(team.abbr) + '</span><span class="team-name">' + U.escapeHtml(team.name) +
@@ -83,10 +81,6 @@
   }
 
   function wireEvents() {
-    container.querySelector("#cap-team-select").addEventListener("change", function (e) {
-      selectedTeamId = e.target.value;
-      render();
-    });
     container.querySelectorAll('[data-action="release"]').forEach(function (b) {
       b.addEventListener("click", function () {
         var p = S.getPlayer(b.dataset.id);

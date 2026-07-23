@@ -17,8 +17,7 @@
   var selectedTeamId = null;
 
   function isOffseasonWindow() {
-    var phase = S.getSeason().phase;
-    return phase === "offseason" || phase === "complete";
+    return S.getSeason().phase === "offseason";
   }
 
   function lowerDivisionIds(teamDivisionId) {
@@ -47,32 +46,28 @@
   function render(el) {
     container = el || container;
     if (!container) return;
-    var teams = S.getTeams().slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
-    if (!teams.length) {
-      container.innerHTML = '<div class="panel-header"><h2>Promotions</h2></div><p class="muted">Add a team first.</p>';
+    var franchise = S.getFranchise();
+    if (!franchise || !franchise.teamId) {
+      container.innerHTML = '<div class="panel-header"><h2>Promotions</h2></div><p class="muted">Pick your team on the Startup Draft tab first — Promotions only works for the team you manage.</p>';
       return;
     }
-    var franchise = S.getFranchise();
-    if (!selectedTeamId || !teams.some(function (t) { return t.id === selectedTeamId; })) {
-      selectedTeamId = (franchise && franchise.teamId) || teams[0].id;
-    }
+    selectedTeamId = franchise.teamId;
     var team = S.getTeam(selectedTeamId);
+    if (!team) {
+      container.innerHTML = '<div class="panel-header"><h2>Promotions</h2></div><p class="muted">Your managed team couldn\'t be found.</p>';
+      return;
+    }
     var division = S.getDivision(team.division);
 
     var html = '<div class="panel-header"><h2>Promotions</h2></div>';
-    html += '<p class="muted">Off-season only: call a player up permanently from any lower-tier division onto your roster. ' +
-      "There's no negotiation — a league-set call-up fee (based on the player's Overall/Potential) has to fit in your cap " +
-      "space alongside their new salary, or the move doesn't go through.</p>";
+    html += '<p class="muted">Off-season only: call a player up permanently from any lower-tier division onto ' +
+      U.escapeHtml(team.name) + "'s roster. There's no negotiation — a league-set call-up fee (based on the player's " +
+      "Overall/Potential) has to fit in your cap space alongside their new salary, or the move doesn't go through. " +
+      "You can only manage promotions for the team you GM — every other team handles its own moves automatically.</p>";
 
     if (!isOffseasonWindow()) {
-      html += '<div class="warning-banner">Promotions are only available in the off-season (after every division has crowned a champion, before you generate next season\'s schedule). Current phase: <strong>' + U.escapeHtml(capitalize(S.getSeason().phase || "offseason")) + "</strong>.</div>";
+      html += '<div class="warning-banner">Promotions are only available in the off-season. Current phase: <strong>' + U.escapeHtml(capitalize(S.getSeason().phase || "offseason")) + "</strong>.</div>";
     }
-
-    html += '<div class="filter-bar"><label>Acquiring Team <select id="promo-team-select">';
-    teams.forEach(function (t) {
-      html += '<option value="' + t.id + '"' + (t.id === selectedTeamId ? " selected" : "") + ">" + U.escapeHtml(t.name) + " (" + U.escapeHtml(S.getDivision(t.division).name) + ")</option>";
-    });
-    html += "</select></label></div>";
 
     var cap = S.capForTeam(selectedTeamId);
     var used = S.capUsed(selectedTeamId);
@@ -176,10 +171,6 @@
   }
 
   function wireEvents() {
-    container.querySelector("#promo-team-select").addEventListener("change", function (e) {
-      selectedTeamId = e.target.value;
-      render();
-    });
     container.querySelectorAll('[data-action="promote"]').forEach(function (b) {
       b.addEventListener("click", function () {
         var p = S.getPlayer(b.dataset.id);
@@ -194,5 +185,12 @@
     });
   }
 
-  window.PHLPromotions = { render: render, promotePlayer: promotePlayer };
+  window.PHLPromotions = {
+    render: render,
+    promotePlayer: promotePlayer,
+    isOffseasonWindow: isOffseasonWindow,
+    eligiblePlayers: eligiblePlayers,
+    lowerDivisionIds: lowerDivisionIds,
+    callUpFee: callUpFee,
+  };
 })();

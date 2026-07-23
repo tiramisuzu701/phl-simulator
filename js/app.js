@@ -11,6 +11,7 @@
     dashboard: window.PHLDashboard,
     startup: window.PHLStartupDraft,
     teams: window.PHLTeams,
+    teamdetail: window.PHLTeamDetail,
     players: window.PHLPlayers,
     schedule: window.PHLSchedule,
     standings: window.PHLStandings,
@@ -58,7 +59,50 @@
       "Season " + (season.seasonNumber || 1) + " · " +
       capitalize(season.phase || "offseason") + " · " +
       S.getTeams().length + " teams";
+    updateAdvanceButton();
   }
+
+  // The single control that drives the whole season forward — see
+  // js/calendar.js. Lives in the header so it's reachable from every tab.
+  function updateAdvanceButton() {
+    var el = document.getElementById("header-advance");
+    if (!el || !window.PHLCalendar) return;
+    var Cal = window.PHLCalendar;
+    if (!Cal.isSetupComplete()) {
+      el.innerHTML = '<span class="muted small">Finish the Startup Draft to unlock Advance Week</span>';
+      return;
+    }
+    var blocked = Cal.checkBlocked();
+    el.innerHTML =
+      '<span class="week-pill">' + U.escapeHtml(Cal.weekLabel()) + "</span>" +
+      '<button class="btn btn-primary" id="btn-advance-week"' + (blocked ? " disabled" : "") + ">Advance Week</button>";
+    if (blocked) {
+      el.innerHTML += '<span class="warning-banner header-block-warning">' + U.escapeHtml(blocked) + "</span>";
+    }
+    var btn = document.getElementById("btn-advance-week");
+    if (btn) {
+      btn.addEventListener("click", function () {
+        var result = Cal.advanceWeek();
+        if (!result.advanced) {
+          alert(result.reason);
+          updateAdvanceButton();
+          return;
+        }
+        refreshAll();
+        if (result.summary && result.summary.length) {
+          // A lightweight, non-blocking heads-up rather than a modal per
+          // week — full detail always lives in the relevant tab.
+          console.log("[Advance Week]", result.summary.join(" "));
+        }
+      });
+    }
+  }
+
+  function showTeamDetail(teamId) {
+    if (window.PHLTeamDetail) window.PHLTeamDetail.setTeam(teamId);
+    showTab("teamdetail");
+  }
+
   function capitalize(s) {
     return s.charAt(0).toUpperCase() + s.slice(1);
   }
@@ -78,7 +122,7 @@
     showTab(needsSetup ? "startup" : "dashboard");
   }
 
-  window.PHLApp = { showTab: showTab, refresh: refresh, refreshAll: refreshAll };
+  window.PHLApp = { showTab: showTab, refresh: refresh, refreshAll: refreshAll, showTeamDetail: showTeamDetail };
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);

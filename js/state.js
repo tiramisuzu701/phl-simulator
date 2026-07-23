@@ -47,13 +47,28 @@
     if (!d.franchise) d.franchise = deepClone(starter.franchise);
     if (!d.startupDraft) d.startupDraft = deepClone(starter.startupDraft);
     if (!d.promotions) d.promotions = [];
+    if (d.expansionDraft === undefined) d.expansionDraft = null;
     for (var key in starter.settings) {
       if (!(key in d.settings)) d.settings[key] = starter.settings[key];
     }
+    // Older saves used a terminal "complete" phase once every division's
+    // bracket crowned a champion. The weekly calendar (js/calendar.js) now
+    // drives that transition itself via calendarWeek, so fold "complete"
+    // straight back into "offseason" on load.
+    if (d.season.phase === "complete") d.season.phase = "offseason";
+    if (d.season.calendarWeek == null) d.season.calendarWeek = 1;
+    if (d.season.entryDraftDoneThisCycle == null) d.season.entryDraftDoneThisCycle = false;
+    if (!d.season.playoffs) d.season.playoffs = {};
+    d.divisions.forEach(function (div) {
+      if (div.gamesPerWeek == null) {
+        var starterDiv = starter.divisions.find(function (sd) { return sd.id === div.id; });
+        div.gamesPerWeek = starterDiv ? starterDiv.gamesPerWeek : 2;
+      }
+    });
     d.players.forEach(function (p) {
       if (!p.attributes) p.attributes = U.deriveAttributes(p.overall, p.position, p.archetype);
       if (p.age == null) p.age = U.generateStartingAge();
-      if (p.retirementAge == null) p.retirementAge = U.retirementAgeFor();
+      if (p.retirementAge == null) p.retirementAge = U.retirementAgeFor(p.age);
       if (!p.stats) p.stats = freshStatLine();
       if (p.starter == null) p.starter = false;
     });
@@ -188,7 +203,7 @@
     if (player.stats == null) player.stats = freshStatLine();
     if (player.salary == null) player.salary = U.salaryAsking(player.overall || 60, player.potential || player.overall || 60);
     if (player.age == null) player.age = U.generateStartingAge();
-    if (player.retirementAge == null) player.retirementAge = U.retirementAgeFor();
+    if (player.retirementAge == null) player.retirementAge = U.retirementAgeFor(player.age);
     data.players.push(player);
     save();
     return player;
@@ -297,6 +312,29 @@
     return entry;
   }
 
+  // ---------------- Expansion Draft (one-time per new expansion team) --
+  function getExpansionDraft() {
+    return data.expansionDraft;
+  }
+  function setExpansionDraft(ed) {
+    data.expansionDraft = ed;
+    save();
+  }
+  function updateExpansionDraft(patch) {
+    if (!data.expansionDraft) return null;
+    Object.assign(data.expansionDraft, patch);
+    save();
+    return data.expansionDraft;
+  }
+
+  // Is this the team the human GM currently manages? Every action that
+  // touches a roster/contract (sign, release, re-sign, lineup, promote)
+  // should gate on this — other teams are AI-managed and read-only to the
+  // user (see js/aiManager.js for their automated behavior).
+  function isManagedTeam(teamId) {
+    return !!teamId && data.franchise.teamId === teamId;
+  }
+
   // ---------------- Cap helpers ----------------
   // Salary cap is per-division (top divisions have bigger budgets), not a
   // single league-wide number.
@@ -358,5 +396,9 @@
     updateStartupDraft: updateStartupDraft,
     getPromotions: getPromotions,
     addPromotion: addPromotion,
+    getExpansionDraft: getExpansionDraft,
+    setExpansionDraft: setExpansionDraft,
+    updateExpansionDraft: updateExpansionDraft,
+    isManagedTeam: isManagedTeam,
   };
 })();

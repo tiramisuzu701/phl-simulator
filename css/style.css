@@ -100,6 +100,22 @@ em { color: var(--text-secondary); font-style: normal; }
 }
 .brand-text { font-weight: 600; font-size: 1.05rem; }
 .header-meta { color: var(--text-muted); font-size: 0.85rem; }
+.header-advance { display: flex; align-items: center; gap: 0.6rem; }
+.week-pill {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.header-block-warning {
+  max-width: 260px;
+  font-size: 0.72rem;
+  padding: 0.3rem 0.5rem;
+  margin-top: 0;
+}
 
 .tab-nav {
   display: flex;
@@ -245,6 +261,8 @@ input, select {
   border-radius: 5px;
 }
 .team-name { font-weight: 600; }
+.team-name-link { cursor: pointer; }
+.team-name-link:hover { text-decoration: underline; }
 .team-card-stats { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.4rem; }
 .team-card-cap { font-size: 0.78rem; margin: 0.25rem 0 0.6rem; }
 .team-card-actions { display: flex; gap: 0.4rem; }
@@ -348,17 +366,27 @@ input, select {
 .week-block h4 { margin: 0 0 0.5rem; font-size: 0.9rem; color: var(--text-secondary); }
 .game-row {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: 1fr auto 1fr auto;
   align-items: center;
   padding: 0.3rem 0;
   font-size: 0.88rem;
   font-variant-numeric: tabular-nums;
   border-bottom: 1px dashed var(--gridline);
 }
+.game-row[data-action="toggle-box"] { cursor: pointer; }
+.game-row[data-action="toggle-box"]:hover { background: var(--surface-2); }
 .game-row:last-child { border-bottom: none; }
 .game-team:last-child { text-align: right; }
 .game-score { text-align: center; font-weight: 600; }
 .game-upcoming .game-score { color: var(--text-muted); font-weight: 400; }
+.boxscore-toggle { text-align: right; white-space: nowrap; }
+
+.boxscore { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; padding: 0.5rem 0 1rem; }
+.boxscore-team h5 { margin: 0 0 0.4rem; }
+.boxscore-team .data-table { margin-bottom: 0.5rem; }
+@media (max-width: 640px) {
+  .boxscore { grid-template-columns: 1fr; }
+}
 
 /* ---------- Playoffs ---------- */
 .playoff-round { margin-bottom: 1.25rem; }

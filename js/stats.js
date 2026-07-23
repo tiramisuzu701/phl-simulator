@@ -76,11 +76,10 @@
     html += '<div class="panel-header" style="margin-top:2rem"><h2>Offseason</h2></div>';
     html += '<div class="form-card"><p class="muted">Season ' + S.getSeason().seasonNumber + " &middot; Phase: " + S.getSeason().phase +
       (retiredCount ? " &middot; " + retiredCount + " retired legend(s)" : "") + '</p>';
-    html += "<p>Starting a new season quietly ages every active player, begins skill decline past " + S.getSettings().declineStartAge +
-      ", retires players who reach their (hidden, randomized) retirement age, ticks down contracts (expiring players hit free agency), " +
-      "drops in a fresh breakout rookie class, resets records/stats, and builds a new schedule.</p>";
-    html += '<button class="btn btn-primary" data-action="new-season">Start New Season</button> ' +
-      '<button class="btn" data-action="gen-rookies">Generate Rookie Class Only</button></div>';
+    html += "<p>Aging, decline, retirement, contract expiry, the breakout rookie class, and building the next schedule all " +
+      "now happen automatically when Advance Week (top right) rolls out of the off-season — nothing to click here. " +
+      "You can still drop in an extra rookie class by hand any time if you want more free agents on the market.</p>";
+    html += '<button class="btn" data-action="gen-rookies">Generate Rookie Class Only</button></div>';
 
     container.innerHTML = html;
     wireEvents();
@@ -128,7 +127,7 @@
     S.getPlayers().forEach(function (p) {
       if (p.isDraftProspect || p.startupDraftPool || p.retired) return;
       p.age = (p.age != null ? p.age : U.generateStartingAge()) + 1;
-      if (p.retirementAge == null) p.retirementAge = U.retirementAgeFor();
+      if (p.retirementAge == null) p.retirementAge = U.retirementAgeFor(p.age);
 
       if (p.age >= p.retirementAge) {
         p.retired = true;
@@ -177,6 +176,7 @@
       var eligibleDivisions = Math.random() < (settings.rookieContenderChance || 0.25)
         ? ["prospect", "contender"]
         : ["prospect"];
+      var rookieAge = U.generateRookieAge();
       var player = {
         name: U.randomName(),
         position: position,
@@ -190,8 +190,8 @@
         isDraftProspect: false,
         eligibleDivisions: eligibleDivisions,
         isRookieClass: true,
-        age: U.generateRookieAge(),
-        retirementAge: U.retirementAgeFor(),
+        age: rookieAge,
+        retirementAge: U.retirementAgeFor(rookieAge),
         stats: S.freshStatLine(),
       };
       created.push(S.addPlayer(player));
@@ -199,29 +199,10 @@
     return created;
   }
 
-  function startNewSeason() {
-    if (!confirm("Start a new season? This ages players (some may retire), expires contracts, generates a new breakout rookie class, resets records/stats, and builds a new schedule.")) return;
-    var priorSeasonNumber = S.getSeason().seasonNumber || 1;
-    var retired = ageAndDeclinePlayers();
-    var rookies = generateRookieClass();
-    S.updateSeason({ seasonNumber: priorSeasonNumber + 1 });
-    if (window.PHLSchedule) window.PHLSchedule.generateSeasonSchedule();
-    alert(
-      "Season " + priorSeasonNumber + " is in the books.\n" +
-      retired.length + " player(s) retired.\n" +
-      rookies.length + " breakout rookie(s) joined free agency (mostly Prospect-eligible)."
-    );
-  }
-
   function wireEvents() {
     container.querySelector("#stats-division").addEventListener("change", function (e) {
       divFilter = e.target.value;
       render();
-    });
-    container.querySelector('[data-action="new-season"]').addEventListener("click", function () {
-      startNewSeason();
-      render();
-      if (window.PHLApp) window.PHLApp.refresh();
     });
     container.querySelector('[data-action="gen-rookies"]').addEventListener("click", function () {
       var rookies = generateRookieClass();
@@ -233,7 +214,6 @@
 
   window.PHLStats = {
     render: render,
-    startNewSeason: startNewSeason,
     generateRookieClass: generateRookieClass,
     ageAndDeclinePlayers: ageAndDeclinePlayers,
   };

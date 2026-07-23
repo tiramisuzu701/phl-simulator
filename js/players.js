@@ -103,9 +103,11 @@
       html += "<td>" + U.formatMoney(p.salary) + "</td>";
       html += "<td>" + (p.contractYears != null ? p.contractYears : "&mdash;") + "</td>";
       html += '<td><span class="pill">' + status + "</span></td>";
-      if (t && !p.retired) {
+      if (t && !p.retired && S.isManagedTeam(t.id)) {
         html += '<td><button class="btn btn-sm ' + (p.starter ? "btn-primary" : "") + '" data-action="toggle-starter" data-id="' + p.id + '">' +
           (p.starter ? "Starter" : "Bench") + "</button></td>";
+      } else if (t && !p.retired) {
+        html += '<td><span class="muted small" title="Only the team you manage can set lineups by hand — every other team auto-fills its best available players.">AI-managed</span></td>';
       } else {
         html += "<td>&mdash;</td>";
       }
@@ -262,7 +264,7 @@
       } else {
         patch.stats = S.freshStatLine();
         patch.age = U.generateStartingAge();
-        patch.retirementAge = U.retirementAgeFor();
+        patch.retirementAge = U.retirementAgeFor(patch.age);
         S.addPlayer(patch);
       }
       panel.innerHTML = "";
@@ -293,6 +295,7 @@
     var overall = U.randInt(52, 88);
     var potential = U.clamp(overall + U.randInt(0, 14), overall, 99);
     var archetype = U.randomArchetype(position);
+    var age = U.generateStartingAge();
     var player = {
       name: U.randomName(),
       position: position,
@@ -304,8 +307,8 @@
       contractYears: U.randInt(1, 4),
       teamId: teamId,
       isDraftProspect: false,
-      age: U.generateStartingAge(),
-      retirementAge: U.retirementAgeFor(),
+      age: age,
+      retirementAge: U.retirementAgeFor(age),
       stats: S.freshStatLine(),
     };
     S.addPlayer(player);

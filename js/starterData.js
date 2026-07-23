@@ -37,9 +37,13 @@
     // below `teams` in the standings (e.g. an added expansion team landing
     // in last place) simply misses the playoffs — no extra round is added
     // for it.
-    { id: "prospect", name: "Prospect", tier: 1, salaryCap: 1000000, playoff: { teams: 10, byes: 6 } },
-    { id: "contender", name: "Contender", tier: 2, salaryCap: 2000000, playoff: { teams: 8, byes: 8 } },
-    { id: "pro", name: "Pro", tier: 3, salaryCap: 4000000, playoff: { teams: 4, byes: 4 } },
+    // gamesPerWeek drives the weekly calendar (see js/calendar.js): each
+    // division plays a fixed 12-week regular season, so gamesPerWeek sets
+    // its total game count too (Pro: 2/wk x 12wk = 24 games; Contender &
+    // Prospect: 3/wk x 12wk = 36 games).
+    { id: "prospect", name: "Prospect", tier: 1, salaryCap: 1000000, gamesPerWeek: 3, playoff: { teams: 10, byes: 6 } },
+    { id: "contender", name: "Contender", tier: 2, salaryCap: 2000000, gamesPerWeek: 3, playoff: { teams: 8, byes: 8 } },
+    { id: "pro", name: "Pro", tier: 3, salaryCap: 4000000, gamesPerWeek: 2, playoff: { teams: 4, byes: 4 } },
   ];
 
   // Real PHL Season 4 roster sweep (Pro + Contender + Prospect, every
@@ -287,7 +291,9 @@
     settings: {
       rosterMax: 14, // max players a team may hold
       lineup: { F: 2, D: 2, G: 1 }, // active lineup per game (Puck is 2F+2D+1G)
-      targetGamesPerTeam: 18,
+      targetGamesPerTeam: 18, // legacy fallback only — see division.gamesPerWeek
+      offseasonWeeks: 5,
+      regularSeasonWeeks: 12,
       pointsForWin: 2,
       pointsForOtLoss: 1,
       playoffTeamsPerDivision: 4,
@@ -302,6 +308,9 @@
       // Chance a given breakout rookie is eligible for Contender (instead
       // of Prospect-only). Never eligible for Pro straight out of the gate.
       rookieContenderChance: 0.25,
+      // Startup Draft rounds vs. a later Expansion Draft's rounds.
+      startupDraftRounds: 8,
+      expansionDraftRounds: 6,
     },
     divisions: divisions,
     teams: teams,
@@ -311,9 +320,15 @@
     // through the in-browser editor, or use "Generate Sample Roster" in
     // the Players tab for quick placeholder testing.
     players: startupPool,
+    // Single "Advance Week" button (js/calendar.js) drives everything —
+    // no more separate sim/draft/playoff buttons to click through. Every
+    // season cycles offseason(5wk, freeform) -> regular(12wk) ->
+    // playoffs(up to 4wk, per-division) -> back to offseason.
     season: {
       seasonNumber: 1,
-      phase: "offseason", // offseason -> regular -> playoffs -> complete
+      phase: "offseason", // offseason -> regular -> playoffs -> offseason (repeats)
+      calendarWeek: 1, // 1-based position within the current phase
+      entryDraftDoneThisCycle: false,
       schedule: [],
       currentWeekIndex: 0,
       playoffs: {}, // keyed by divisionId
@@ -350,5 +365,11 @@
     // player up from any strictly-lower-tier division. Automatic, no
     // negotiation — see js/promotions.js. Full history logged here.
     promotions: [], // { id, season, fromTeamId, toTeamId, playerId, fee }
+    // A solo, single-team draft run whenever an Expansion Franchise is
+    // added mid-save (see js/expansion.js) — 6 rounds (vs. the Startup
+    // Draft's 8) picking from the current free-agent pool to build that
+    // one new team's roster from scratch. Null when no expansion draft is
+    // in progress.
+    expansionDraft: null, // { status, teamId, round, totalRounds, pool, picks }
   };
 })();

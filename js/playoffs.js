@@ -26,6 +26,33 @@
     return { teams: fallback, byes: fallback };
   }
 
+  // Analytically computes how many rounds (incl. a Wild Card round, if any)
+  // a division's bracket takes to crown a champion, purely from its
+  // {teams, byes} config — no simulation needed. The weekly calendar
+  // engine uses this to know how many playoff weeks a division needs
+  // (Pro: 2, Contender: 3, Prospect: 4 including Wild Card, with the
+  // current default configs) and when it's safe to close out the whole
+  // playoffs phase.
+  function totalRoundsForDivision(divisionId) {
+    var cfg = getPlayoffConfig(divisionId);
+    var teams = cfg.teams;
+    var byes = Math.min(cfg.byes, teams);
+    var wildcardSeeds = teams - byes;
+    var rounds = 0;
+    var advancing;
+    if (wildcardSeeds >= 2) {
+      rounds += 1;
+      advancing = byes + Math.floor(wildcardSeeds / 2) + (wildcardSeeds % 2 === 1 ? 1 : 0);
+    } else {
+      advancing = teams;
+    }
+    while (advancing > 1) {
+      advancing = Math.floor(advancing / 2);
+      rounds += 1;
+    }
+    return Math.max(1, rounds);
+  }
+
   function roundNameForTeamCount(n) {
     if (n <= 2) return "Final";
     if (n === 4) return "Semifinals";
@@ -157,21 +184,19 @@
     while (!seriesIsDecided(series)) simulateSeriesGame(series);
   }
 
-  // Once every division has crowned a champion, the season is fully done —
-  // flip the season phase to "complete" so offseason-only tools (Entry
-  // Draft, Promotions, Start New Season) know it's safe to act. This
-  // doesn't fire mid-way through — a division still has an active bracket
-  // won't count as complete, so partial playoff progress never triggers it.
-  function checkAllDivisionsComplete() {
+  // True once every division currently in the playoffs.playoffs map has
+  // crowned a champion. The weekly calendar engine (js/calendar.js) uses
+  // this to know it can end the playoffs phase early rather than always
+  // burning all 4 weeks, and to know it's safe to enforce the per-division
+  // idle-once-you're-done behavior (a division with a shorter bracket,
+  // e.g. Pro's 2 rounds, just sits done while others keep playing).
+  function allDivisionsHaveChampions() {
     var divisions = S.getDivisions();
     var season = S.getSeason();
-    var allDone = divisions.every(function (d) {
+    return divisions.every(function (d) {
       var bracket = season.playoffs && season.playoffs[d.id];
       return bracket && bracket.champion;
     });
-    if (allDone && season.phase !== "complete") {
-      S.updateSeason({ phase: "complete" });
-    }
   }
 
   function advanceBracket(divisionId) {
@@ -200,7 +225,6 @@
 
     if (lastRound.series.length === 1) {
       bracket.champion = lastRound.series[0].winnerId;
-      checkAllDivisionsComplete();
       S.save();
       return;
     }
@@ -230,6 +254,22 @@
     }
   }
 
+  // Resolves exactly the CURRENT round (all its series, end to end) and
+  // advances the bracket to the next round — one call = one playoff week.
+  // This is what the header's Advance Week button calls for each division
+  // still active during the playoffs phase (js/calendar.js); a division
+  // whose bracket already crowned a champion is simply skipped, so a
+  // shorter bracket (e.g. Pro's 2 rounds) sits idle once it's done while
+  // a longer one (e.g. Prospect's wild-card + 3 rounds) keeps playing.
+  function simulateOneRound(divisionId) {
+    var bracket = S.getSeason().playoffs[divisionId];
+    if (!bracket || bracket.champion) return false;
+    var lastRound = bracket.rounds[bracket.rounds.length - 1];
+    lastRound.series.forEach(simulateSeries);
+    advanceBracket(divisionId);
+    return true;
+  }
+
   // ---------------- Rendering ----------------
   function render(el) {
     container = el || container;
@@ -254,13 +294,12 @@
     if (!bracket) {
       html += '<div class="empty-state">';
       if (!regularDone) {
-        html += "<p>The regular season isn't finished for this division yet. Finish it in the Schedule tab, then come back to start the playoffs.</p>";
+        html += "<p>The regular season isn't finished for this division yet — keep hitting Advance Week up top.</p>";
       } else {
         var formatNote = cfg.byes < cfg.teams
           ? "Top " + cfg.byes + " get a bye; seeds " + (cfg.byes + 1) + "–" + cfg.teams + " play a Wild Card round for the last spot(s)."
           : "Top " + cfg.teams + " make it, straight into the bracket.";
-        html += '<p>Regular season complete — ready to set the bracket. <span class="muted">' + formatNote + '</span></p>' +
-          '<button class="btn btn-primary" data-action="start-playoffs" data-division="' + div + '">Start Playoffs</button>';
+        html += '<p>Regular season complete — the bracket is set the next time you hit Advance Week. <span class="muted">' + formatNote + '</span></p>';
       }
       html += "</div>";
       container.innerHTML = html;
@@ -272,7 +311,7 @@
       var champ = S.getTeam(bracket.champion);
       html += '<div class="champion-banner">&#127942; <strong>' + U.escapeHtml(champ ? champ.name : "?") + "</strong> is the " + U.escapeHtml(S.getDivision(div).name) + " Division Champion!</div>";
     } else {
-      html += '<div class="action-row"><button class="btn btn-primary" data-action="sim-bracket" data-division="' + div + '">Simulate Full Bracket</button></div>';
+      html += '<p class="muted small">One round resolves per Advance Week — keep hitting the button up top to move the bracket forward.</p>';
     }
 
     bracket.rounds.forEach(function (round) {
@@ -292,10 +331,7 @@
           });
           html += "</div>";
         }
-        if (!series.winnerId) {
-          html += '<button class="btn btn-sm" data-action="sim-series-game" data-series="' + series.id + '" data-division="' + div + '">Sim Game</button>';
-          html += '<button class="btn btn-sm" data-action="sim-series" data-series="' + series.id + '" data-division="' + div + '">Sim Series</button>';
-        } else {
+        if (series.winnerId) {
           html += '<div class="pill">Winner: ' + U.escapeHtml((S.getTeam(series.winnerId) || {}).name || "?") + "</div>";
         }
         html += "</div>";
@@ -313,17 +349,6 @@
     wireEvents();
   }
 
-  function findSeries(divisionId, seriesId) {
-    var bracket = S.getSeason().playoffs[divisionId];
-    var found = null;
-    bracket.rounds.forEach(function (round) {
-      round.series.forEach(function (s) {
-        if (s.id === seriesId) found = s;
-      });
-    });
-    return found;
-  }
-
   function wireEvents() {
     container.querySelectorAll("[data-division]").forEach(function (b) {
       if (b.dataset.action) return;
@@ -332,42 +357,15 @@
         render();
       });
     });
-    var start = container.querySelector('[data-action="start-playoffs"]');
-    if (start) start.addEventListener("click", function () {
-      startPlayoffs(start.dataset.division);
-      render();
-      if (window.PHLApp) window.PHLApp.refresh();
-    });
-    var simBracket = container.querySelector('[data-action="sim-bracket"]');
-    if (simBracket) simBracket.addEventListener("click", function () {
-      simulateFullBracket(simBracket.dataset.division);
-      render();
-      if (window.PHLApp) window.PHLApp.refresh();
-    });
-    container.querySelectorAll('[data-action="sim-series-game"]').forEach(function (b) {
-      b.addEventListener("click", function () {
-        var series = findSeries(b.dataset.division, b.dataset.series);
-        simulateSeriesGame(series);
-        advanceBracket(b.dataset.division);
-        render();
-        if (window.PHLApp) window.PHLApp.refresh();
-      });
-    });
-    container.querySelectorAll('[data-action="sim-series"]').forEach(function (b) {
-      b.addEventListener("click", function () {
-        var series = findSeries(b.dataset.division, b.dataset.series);
-        simulateSeries(series);
-        advanceBracket(b.dataset.division);
-        render();
-        if (window.PHLApp) window.PHLApp.refresh();
-      });
-    });
   }
 
   window.PHLPlayoffs = {
     render: render,
     startPlayoffs: startPlayoffs,
     simulateFullBracket: simulateFullBracket,
+    simulateOneRound: simulateOneRound,
+    allDivisionsHaveChampions: allDivisionsHaveChampions,
+    totalRoundsForDivision: totalRoundsForDivision,
     getPlayoffConfig: getPlayoffConfig,
   };
 })();

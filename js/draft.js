@@ -37,6 +37,7 @@
     var overall = Math.random() < 0.12 ? U.randInt(78, 92) : U.randInt(45, 78);
     var potential = U.clamp(overall + U.randInt(0, 22), overall, 99);
     var archetype = U.randomArchetype(position);
+    var age = U.randInt(17, 20);
     return {
       name: U.randomName(),
       position: position,
@@ -48,8 +49,8 @@
       contractYears: 3,
       teamId: null,
       isDraftProspect: true,
-      age: U.randInt(18, 21),
-      retirementAge: U.retirementAgeFor(),
+      age: age,
+      retirementAge: U.retirementAgeFor(age),
       stats: S.freshStatLine(),
     };
   }
@@ -75,6 +76,10 @@
       pool: poolIds,
       picks: [],
     });
+    // Marks this off-season cycle's Entry Draft as handled so the weekly
+    // calendar engine won't also auto-run one when the off-season ends —
+    // see js/calendar.js.
+    S.updateSeason({ entryDraftDoneThisCycle: true });
   }
 
   function currentTeamId() {
@@ -142,11 +147,17 @@
     container = el || container;
     if (!container) return;
     var d = S.getDraft();
+    var isOffseason = S.getSeason().phase === "offseason";
     var html = '<div class="panel-header"><h2>Entry Draft</h2></div>';
+    html += '<p class="muted small">Runs during the off-season — anytime across its 5 weeks. If you don\'t run it yourself, it auto-completes right before the regular season starts.</p>';
 
     if (!d.active && (!d.picks || !d.picks.length)) {
-      html += '<div class="empty-state"><p>Run a league-wide entry draft (' + ROUNDS + ' rounds, snake order, worst record picks first). Undrafted prospects join free agency afterward.</p>' +
-        '<button class="btn btn-primary" data-action="start-draft">Start Entry Draft</button></div>';
+      html += '<div class="empty-state"><p>Run a league-wide entry draft (' + ROUNDS + ' rounds, snake order, worst record picks first). Undrafted prospects join free agency afterward.</p>';
+      if (isOffseason) {
+        html += '<button class="btn btn-primary" data-action="start-draft">Start Entry Draft</button></div>';
+      } else {
+        html += '<p class="muted">Available during the off-season. Current phase: <strong>' + U.escapeHtml(S.getSeason().phase) + "</strong>.</p></div>";
+      }
       container.innerHTML = html;
       wireEvents();
       return;
@@ -175,8 +186,9 @@
       });
       html += "</tbody></table>";
     } else {
-      html += '<div class="action-row"><span class="pill">Draft Complete &mdash; Year ' + d.year + '</span>' +
-        '<button class="btn btn-primary" data-action="start-draft">Run Another Draft</button></div>';
+      html += '<div class="action-row"><span class="pill">Draft Complete &mdash; Year ' + d.year + "</span>";
+      if (isOffseason) html += '<button class="btn btn-primary" data-action="start-draft">Run Another Draft</button>';
+      html += "</div>";
     }
 
     if (d.picks && d.picks.length) {

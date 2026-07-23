@@ -228,20 +228,27 @@
   // Ages are never shown in the UI (PHL only requires players to confirm
   // they're 16+); they exist purely to drive a quiet skill curve.
   function generateStartingAge() {
-    // A mixed league: mostly 18-27 with a longer tail up to veteran ages.
+    // Skews younger league-wide: mostly 16-21 with a shorter tail up to
+    // late-20s veterans (was 18-33 — pulled the whole curve down so a
+    // fresh league feels like a young circuit, not a retirement home).
     var roll = Math.random();
-    if (roll < 0.55) return randInt(18, 24);
-    if (roll < 0.88) return randInt(25, 29);
-    return randInt(30, 33);
+    if (roll < 0.6) return randInt(16, 20);
+    if (roll < 0.9) return randInt(21, 24);
+    return randInt(25, 27);
   }
 
   function generateRookieAge() {
-    return randInt(16, 19);
+    return randInt(16, 18);
   }
 
-  // Randomized per-player so not everyone declines/retires in lockstep.
-  function retirementAgeFor() {
-    return randInt(32, 36);
+  // Randomized per-player, but always anchored to THEIR starting age so a
+  // full career is guaranteed no matter when someone enters the league —
+  // every player gets at least 7 (up to 12) more seasons before their
+  // hidden retirement age hits, so the very first retirement across a
+  // fresh save reliably lands around Season 7, never sooner.
+  function retirementAgeFor(startingAge) {
+    var base = startingAge != null ? startingAge : generateStartingAge();
+    return base + randInt(7, 12);
   }
 
   window.PHLUtil = {

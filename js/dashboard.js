@@ -32,7 +32,8 @@
     } else {
       var myTeam = S.getTeam(franchise.teamId);
       var myDiv = S.getDivision(franchise.divisionId);
-      html += '<p class="muted small">GM of <strong>' + U.escapeHtml(myTeam ? myTeam.name : "?") + "</strong> (" + U.escapeHtml(myDiv ? myDiv.name : "?") + ")</p>";
+      html += '<p class="muted small">GM of <strong>' + U.escapeHtml(myTeam ? myTeam.name : "?") + "</strong> (" + U.escapeHtml(myDiv ? myDiv.name : "?") +
+        ') &middot; use <strong>Advance Week</strong> (top right) to move the season forward.</p>';
     }
     html += '<div class="stat-tile-row">';
     html += statTile("Season", season.seasonNumber || 1);
@@ -65,11 +66,12 @@
     html += "</div>";
 
     html += '<div class="form-card"><h3>Quick Actions</h3><div class="action-row">';
-    html += '<button class="btn" data-goto="startup">Startup Draft</button>';
-    html += '<button class="btn" data-goto="schedule">Schedule &amp; Sim Games</button>';
+    html += '<button class="btn" data-goto="schedule">Schedule &amp; Box Scores</button>';
     html += '<button class="btn" data-goto="standings">View Standings</button>';
     html += '<button class="btn" data-goto="playoffs">Playoffs</button>';
-    html += '<button class="btn" data-goto="draft">Run Draft</button>';
+    html += '<button class="btn" data-goto="contracts">Contracts</button>';
+    html += '<button class="btn" data-goto="promotions">Promotions</button>';
+    html += '<button class="btn" data-goto="teams">Teams &amp; Expansion</button>';
     html += '<button class="btn" data-goto="data">Export / Import League</button>';
     html += "</div></div>";
 
