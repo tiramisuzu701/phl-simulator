@@ -19,6 +19,15 @@
     return teams;
   }
 
+  function playoffFormatText(cfg) {
+    if (cfg.teams <= cfg.byes) {
+      return "Top " + cfg.teams + " make the playoffs.";
+    }
+    var wildcardSpots = cfg.teams - cfg.byes;
+    return "Top " + cfg.byes + " clinch a bye straight into the bracket; seeds " + (cfg.byes + 1) + "–" + cfg.teams +
+      " play a Wild Card round for the final " + wildcardSpots + (wildcardSpots === 1 ? " spot." : " spots.");
+  }
+
   function render(el) {
     container = el || container;
     if (!container) return;
@@ -34,25 +43,40 @@
         html += '<p class="muted">No teams in this division.</p></div>';
         return;
       }
+      var cfg = window.PHLPlayoffs ? window.PHLPlayoffs.getPlayoffConfig(div.id) : { teams: S.getSettings().playoffTeamsPerDivision || 4, byes: S.getSettings().playoffTeamsPerDivision || 4 };
+      var hasWildcard = cfg.teams > cfg.byes;
+
       html += '<table class="data-table standings-table"><thead><tr>' +
-        "<th>#</th><th>Team</th><th>GP</th><th>W</th><th>L</th><th>OTL</th><th>PTS</th><th>GF</th><th>GA</th><th>DIFF</th><th></th>" +
+        "<th>#</th><th>Team</th><th>GP</th><th>W</th><th>L</th><th>OTL</th><th>PTS</th><th>GF</th><th>GA</th><th>DIFF</th><th></th><th>Status</th>" +
         "</tr></thead><tbody>";
       teams.forEach(function (t, i) {
         var gp = t.wins + t.losses + t.otLosses;
         var diff = t.gf - t.ga;
         var pct = U.clamp((t.points / maxPoints) * 100, 0, 100);
-        var playoffLine = S.getSettings().playoffTeamsPerDivision || 4;
-        html += '<tr class="' + (i < playoffLine ? "in-playoffs" : "") + '">';
-        html += "<td>" + (i + 1) + "</td>";
+        var seed = i + 1;
+        var rowClass = "";
+        var statusPill = "";
+        if (seed <= cfg.byes) {
+          rowClass = "in-playoffs";
+          statusPill = '<span class="pill pill-clinch">' + (hasWildcard ? "Bye" : "Clinched") + "</span>";
+        } else if (seed <= cfg.teams) {
+          rowClass = "in-wildcard";
+          statusPill = '<span class="pill pill-warn">Wild Card</span>';
+        } else {
+          statusPill = '<span class="muted small">&mdash;</span>';
+        }
+        html += '<tr class="' + rowClass + '">';
+        html += "<td>" + seed + "</td>";
         html += '<td class="team-cell"><span class="dot" style="background:' + U.colorForId(t.id) + '"></span>' + U.escapeHtml(t.name) + "</td>";
         html += "<td>" + gp + "</td><td>" + t.wins + "</td><td>" + t.losses + "</td><td>" + t.otLosses + "</td>";
         html += "<td><strong>" + t.points + "</strong></td>";
         html += "<td>" + t.gf + "</td><td>" + t.ga + "</td><td>" + (diff > 0 ? "+" + diff : diff) + "</td>";
         html += '<td class="bar-cell"><div class="mini-bar"><div class="mini-bar-fill" style="width:' + pct + '%"></div></div></td>';
+        html += "<td>" + statusPill + "</td>";
         html += "</tr>";
       });
       html += "</tbody></table>";
-      html += '<p class="muted small">Top ' + (S.getSettings().playoffTeamsPerDivision || 4) + " make the playoffs.</p>";
+      html += '<p class="muted small">' + playoffFormatText(cfg) + "</p>";
       html += "</div>";
     });
 

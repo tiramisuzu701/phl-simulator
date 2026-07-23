@@ -307,6 +307,7 @@ input, select {
 .team-cell { display: flex; align-items: center; gap: 0.5rem; }
 .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 .standings-table tr.in-playoffs td:first-child { box-shadow: inset 3px 0 0 var(--good); }
+.standings-table tr.in-wildcard td:first-child { box-shadow: inset 3px 0 0 var(--warning); }
 
 /* ---------- Pills / chips ---------- */
 .pill {
@@ -319,6 +320,7 @@ input, select {
 }
 .pill-accent { border-color: var(--series-blue); color: var(--series-blue); font-weight: 600; }
 .pill-warn { border-color: var(--warning); color: var(--serious); }
+.pill-clinch { border-color: var(--good); color: var(--good); font-weight: 600; }
 
 .tab-strip { display: flex; gap: 0.4rem; margin-bottom: 1rem; flex-wrap: wrap; }
 .chip {
