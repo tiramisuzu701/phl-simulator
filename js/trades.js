@@ -101,7 +101,7 @@
 
   function tradeColumn(team, selected, side) {
     var roster = S.getRoster(team.id).slice().sort(function (a, b) { return b.overall - a.overall; });
-    var html = '<div class="trade-column"><h3>' + U.escapeHtml(team.name) + ' <span class="muted small">(' + roster.length + ' on roster)</span></h3>';
+    var html = '<div class="trade-column"><h3 class="trade-column-heading">' + U.crestHtml(team, "crest-sm") + U.escapeHtml(team.name) + ' <span class="muted small">(' + roster.length + ' on roster)</span></h3>';
     if (!roster.length) {
       html += '<p class="muted small">No players on this roster.</p></div>';
       return html;

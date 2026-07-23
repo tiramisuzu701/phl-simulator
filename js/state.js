@@ -65,6 +65,18 @@
         div.gamesPerWeek = starterDiv ? starterDiv.gamesPerWeek : 2;
       }
     });
+    // Backfill logoUrl on older saves (from before real PHL logos were
+    // wired in) for any of the 26 built-in teams — matched by id, since
+    // those ids are stable across starterData.js revisions. Teams with no
+    // starter match (a "+ Add Team" or Expansion Franchise team) are left
+    // alone and just render the plain colored-abbreviation fallback badge.
+    d.teams.forEach(function (t) {
+      if (t.logoUrl === undefined) t.logoUrl = null;
+      if (!t.logoUrl) {
+        var starterTeam = starter.teams.find(function (st) { return st.id === t.id; });
+        if (starterTeam && starterTeam.logoUrl) t.logoUrl = starterTeam.logoUrl;
+      }
+    });
     d.players.forEach(function (p) {
       if (!p.attributes) p.attributes = U.deriveAttributes(p.overall, p.position, p.archetype);
       if (p.age == null) p.age = U.generateStartingAge();

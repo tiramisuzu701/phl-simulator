@@ -309,7 +309,7 @@
 
     if (bracket.champion) {
       var champ = S.getTeam(bracket.champion);
-      html += '<div class="champion-banner">&#127942; <strong>' + U.escapeHtml(champ ? champ.name : "?") + "</strong> is the " + U.escapeHtml(S.getDivision(div).name) + " Division Champion!</div>";
+      html += '<div class="champion-banner">&#127942; ' + (champ ? U.crestHtml(champ, "crest-lg") : "") + '<strong>' + U.escapeHtml(champ ? champ.name : "?") + "</strong> is the " + U.escapeHtml(S.getDivision(div).name) + " Division Champion!</div>";
     } else {
       html += '<p class="muted small">Play out the current round yourself — Sim Game resolves one game, Sim Series finishes that matchup — or just hit Advance Week up top to simulate the whole round for you.</p>';
     }
@@ -324,8 +324,8 @@
         var teamB = S.getTeam(series.teamBId);
         var decided = seriesIsDecided(series);
         html += '<div class="series-card">';
-        html += '<div class="series-row"><span>(' + series.seedA + ") " + U.escapeHtml(teamA ? teamA.name : "?") + '</span><span class="series-wins">' + series.winsA + "</span></div>";
-        html += '<div class="series-row"><span>(' + series.seedB + ") " + U.escapeHtml(teamB ? teamB.name : "?") + '</span><span class="series-wins">' + series.winsB + "</span></div>";
+        html += '<div class="series-row"><span class="series-team">(' + series.seedA + ") " + (teamA ? U.crestHtml(teamA, "crest-sm") : "") + U.escapeHtml(teamA ? teamA.name : "?") + '</span><span class="series-wins">' + series.winsA + "</span></div>";
+        html += '<div class="series-row"><span class="series-team">(' + series.seedB + ") " + (teamB ? U.crestHtml(teamB, "crest-sm") : "") + U.escapeHtml(teamB ? teamB.name : "?") + '</span><span class="series-wins">' + series.winsB + "</span></div>";
         if (series.games.length) {
           html += '<div class="series-games muted small">';
           series.games.forEach(function (g) {

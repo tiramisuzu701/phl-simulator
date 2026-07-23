@@ -1,10 +1,13 @@
 # PHL Franchise Simulator
 
-A free, offline, browser-based fantasy franchise simulator for **PHL** — a
-custom league built around [Puck](https://store.steampowered.com/), the free
+A free, browser-based fantasy franchise simulator for **PHL** — a custom
+league built around [Puck](https://store.steampowered.com/), the free
 hockey-like game on Steam. Manage rosters, simulate seasons, run playoffs,
 draft prospects, and juggle contracts under a salary cap — all client-side,
-no server or account required.
+no server or account required. The simulation itself runs entirely offline;
+the one exception is team logos, which are hotlinked from the real PHL's
+site and need an internet connection to load (see **Interface** below) —
+everything falls back gracefully to a plain badge without one.
 
 Built as a static site (plain HTML/CSS/JS, no build step) so it's easy to
 fork, host on GitHub Pages, or just double-click `index.html` and play.
@@ -272,12 +275,26 @@ in a division below theirs.
 
 ## Interface
 
-The app is a persistent left sidebar (your franchise crest, GM info, and
-every tab) plus a header bar with at-a-glance stat pills (season, phase,
-week, teams, your cap space) and the Advance Week button, always in the
-same place regardless of which tab you're on. On narrow screens the
-sidebar collapses into a horizontally-scrolling top bar so everything
-still fits on mobile.
+The app is a dark, glow-accented "command center" theme: a persistent left
+sidebar (your franchise crest, GM info, and every tab) plus a header bar
+with at-a-glance stat pills (season, phase, week, teams, your cap space)
+and the Advance Week button, always in the same place regardless of which
+tab you're on. On narrow screens the sidebar collapses into a
+horizontally-scrolling top bar so everything still fits on mobile.
+
+**Team logos** are hotlinked directly from the real PHL's own site,
+[phlstats.com](https://phlstats.com) (its Season 4 team logo set) — every
+team's `logoUrl` in `js/starterData.js` points straight at the image on
+that site, so nothing is bundled into this repo. If a logo can't load (no
+internet connection, that URL changes, phlstats.com is unreachable, etc.)
+each team automatically falls back to a plain colored abbreviation badge —
+see `U.crestHtml()` in `js/utils.js` — so the UI never shows a broken
+image. A team with no logo on file at all (a fresh Expansion Franchise, or
+a plain "+ Add Team" league-builder team) always uses that same fallback
+badge. If you'd rather the logos be bundled locally instead of hotlinked
+(e.g. for guaranteed offline play), drop the image files into an `assets/`
+folder and point each team's `logoUrl` at the local path instead — no
+other code changes needed.
 
 For a real, full-league database (hundreds of players), typing them in one
 at a time through the web form is slow. The easiest path is the

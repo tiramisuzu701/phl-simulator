@@ -74,7 +74,7 @@
     var space = S.capSpace(selectedTeamId);
     var pct = U.clamp((used / cap) * 100, 0, 100);
     html += '<div class="cap-summary-card" style="--accent:' + U.colorForId(team.id) + '">';
-    html += '<div class="team-card-head"><span class="team-badge">' + U.escapeHtml(team.abbr) + '</span><span class="team-name">' + U.escapeHtml(team.name) +
+    html += '<div class="team-card-head">' + U.crestHtml(team) + '<span class="team-name">' + U.escapeHtml(team.name) +
       '</span><span class="pill">' + U.escapeHtml(division.name) + " budget</span></div>";
     html += '<div class="cap-bar cap-bar-lg' + (space < 0 ? " cap-over" : "") + '"><div class="cap-bar-fill" style="width:' + pct + '%"></div></div>';
     html += '<div class="muted">Cap Used: ' + U.formatMoney(used) + " / " + U.formatMoney(cap) + " &middot; Space: " + U.formatMoney(space) + "</div>";

@@ -57,7 +57,7 @@
       } else {
         html += '<ol class="mini-standings">';
         standings.forEach(function (t) {
-          html += "<li><span>" + U.escapeHtml(t.name) + "</span><span>" + t.points + " pts</span></li>";
+          html += "<li><span class=\"mini-standings-team\">" + U.crestHtml(t, "crest-sm") + U.escapeHtml(t.name) + "</span><span>" + t.points + " pts</span></li>";
         });
         html += "</ol>";
       }

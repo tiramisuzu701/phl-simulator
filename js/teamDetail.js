@@ -37,7 +37,7 @@
     var cap = S.capForTeam(teamId);
     var used = S.capUsed(teamId);
 
-    var html = '<div class="panel-header"><h2>' + U.escapeHtml(team.name) + "</h2>" +
+    var html = '<div class="panel-header"><h2 class="team-detail-heading">' + U.crestHtml(team, "crest-lg") + U.escapeHtml(team.name) + "</h2>" +
       '<button class="btn btn-sm" data-action="back-to-teams">&larr; Back to Teams</button></div>';
     html += '<p class="muted small">' + U.escapeHtml(division ? division.name : "?") + " Division" +
       (S.isManagedTeam(teamId) ? ' &middot; <span class="pill pill-accent">You GM this team</span>' : "") + "</p>";

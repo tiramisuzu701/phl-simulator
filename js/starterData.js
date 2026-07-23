@@ -10,12 +10,18 @@
 (function () {
   "use strict";
 
-  function team(id, name, abbr, division) {
+  // logoUrl is optional — hotlinked straight from the real PHL's own site
+  // (phlstats.com) rather than bundled with the site, so no logo files
+  // ship in this repo. Teams with no logo (a fresh Expansion Franchise, or
+  // a plain "+ Add Team" league-builder team) fall back to a plain colored
+  // abbreviation badge automatically — see U.crestHtml() in js/utils.js.
+  function team(id, name, abbr, division, logoUrl) {
     return {
       id: id,
       name: name,
       abbr: abbr,
       division: division,
+      logoUrl: logoUrl || null,
       // record + cap fields are (re)computed / stored by state.js at runtime
       wins: 0,
       losses: 0,
@@ -248,38 +254,40 @@
     { id: "sp_192", name: "Bransk", position: "D", archetype: "Stalwart Defender", overall: 53, potential: 81, salary: 95000, contractYears: null, teamId: null, startupDraftPool: true, isDraftProspect: false, retired: false, stats: null },
   ];
 
+  // Logo URLs are hotlinked directly from the real PHL's own site,
+  // phlstats.com (Season 4 team logos) — see the team() comment above.
   var teams = [
     // Pro
-    team("mtl-mist", "Montreal Mist", "MTL", "pro"),
-    team("bri-rats", "Bridgeport Rats", "BRI", "pro"),
-    team("alb-beavers", "Albany Beavers", "ALB", "pro"),
-    team("min-mustangs", "Minnesota Mustangs", "MIN", "pro"),
-    team("ott-sparks", "Ottawa Sparks", "OTT", "pro"),
-    team("rmr-reapers", "Rocky Mountain Reapers", "RMR", "pro"),
+    team("mtl-mist", "Montreal Mist", "MTL", "pro", "https://phlstats.com/teamlogo/Season%204%20Team%20Logos/Pro/Mist%20-%20Demi.png?v=1780569301"),
+    team("bri-rats", "Bridgeport Rats", "BRI", "pro", "https://phlstats.com/teamlogo/Season%204%20Team%20Logos/Pro/Rats%20-%20Ratty.png?v=1780050585"),
+    team("alb-beavers", "Albany Beavers", "ALB", "pro", "https://phlstats.com/teamlogo/Season%204%20Team%20Logos/Pro/Beavers%20-%20Meatsale.png?v=1779253589"),
+    team("min-mustangs", "Minnesota Mustangs", "MIN", "pro", "https://phlstats.com/teamlogo/Season%204%20Team%20Logos/Pro/Mustangs%20-%20Smasher.png?v=1780569309"),
+    team("ott-sparks", "Ottawa Sparks", "OTT", "pro", "https://phlstats.com/teamlogo/Season%204%20Team%20Logos/Pro/Sparks%20-%20Baygull.png?v=1779253606"),
+    team("rmr-reapers", "Rocky Mountain Reapers", "RMR", "pro", "https://phlstats.com/teamlogo/Season%204%20Team%20Logos/Pro/Reapers%20-%20pretty.png?v=1779253597"),
 
     // Contender
-    team("anc-icetitans", "Anchorage Ice Titans", "ANC", "contender"),
-    team("arl-polarbears", "Arlington Polar Bears", "ARL", "contender"),
-    team("stl-eagles", "St. Louis Eagles", "STL", "contender"),
-    team("cam-haunt", "Cambridge Haunt", "CAM", "contender"),
-    team("scc-channelcats", "Schuylkill Channel Cats", "SCC", "contender"),
-    team("tor-penguins", "Toronto Penguins", "TOR", "contender"),
-    team("kan-cadets", "Kanata Cadets", "KAN", "contender"),
-    team("uta-raptors", "Utah Raptors", "UTA", "contender"),
-    team("som-somebodies", "Somewhere Somebodies", "SOM", "contender"),
-    team("oak-volts", "Oakland Volts", "OAK", "contender"),
+    team("anc-icetitans", "Anchorage Ice Titans", "ANC", "contender", "https://phlstats.com/teamlogo/Contender%20S4/Ice%20Titans%20-%20Average.png?v=1780010087"),
+    team("arl-polarbears", "Arlington Polar Bears", "ARL", "contender", "https://phlstats.com/teamlogo/Contender%20S4/Polar%20Bears%20-%20Spork.png?v=1780010087"),
+    team("stl-eagles", "St. Louis Eagles", "STL", "contender", "https://phlstats.com/teamlogo/Contender%20S4/Eagles%20-%20Jackk.png?v=1780010087"),
+    team("cam-haunt", "Cambridge Haunt", "CAM", "contender", "https://phlstats.com/teamlogo/Contender%20S4/Haunt%20-%20Wren.png?v=1780010087"),
+    team("scc-channelcats", "Schuylkill Channel Cats", "SCC", "contender", "https://phlstats.com/teamlogo/Contender%20S4/Channel%20Cats%20-%20Notlad.png?v=1780010087"),
+    team("tor-penguins", "Toronto Penguins", "TOR", "contender", "https://phlstats.com/teamlogo/Contender%20S4/Penguins%20-%20Panther.png?v=1780010087"),
+    team("kan-cadets", "Kanata Cadets", "KAN", "contender", "https://phlstats.com/teamlogo/Contender%20S4/Cadets%20-%20Echo.png?v=1780010087"),
+    team("uta-raptors", "Utah Raptors", "UTA", "contender", "https://phlstats.com/teamlogo/Contender%20S4/Raptors%20-%20Fib.png?v=1780010087"),
+    team("som-somebodies", "Somewhere Somebodies", "SOM", "contender", "https://phlstats.com/teamlogo/Contender%20S4/Somebodies%20-%20Lawly.png?v=1780010087"),
+    team("oak-volts", "Oakland Volts", "OAK", "contender", "https://phlstats.com/teamlogo/Contender%20S4/Volts%20-%20Pikemin.png?v=1780010087"),
 
     // Prospect
-    team("hou-divers", "Houston Divers", "HOU", "prospect"),
-    team("fer-foxes", "Fernie Foxes", "FER", "prospect"),
-    team("slr-otters", "St. Lawrence River Otters", "SLR", "prospect"),
-    team("hqm-mallard", "Hoboken Quacking Mallard", "HQM", "prospect"),
-    team("phi-pyros", "Philadelphia Pyros", "PHI", "prospect"),
-    team("clc-conspiracy", "Crystal Lake Conspiracy", "CLC", "prospect"),
-    team("sbs-sentinels", "South Boston Sentinels", "SBS", "prospect"),
-    team("spo-ravens", "Spokane Ravens", "SPO", "prospect"),
-    team("hbc-caribou", "Hobart Bay Caribou", "HBC", "prospect"),
-    team("pst-stachios", "Port Stanley Stachios", "PST", "prospect"),
+    team("hou-divers", "Houston Divers", "HOU", "prospect", "https://phlstats.com/teamlogo/Season%204%20Team%20Logos/Prospect/Divers%20-%20ThatGuy_No%20BG.png?v=1780175543"),
+    team("fer-foxes", "Fernie Foxes", "FER", "prospect", "https://phlstats.com/teamlogo/Season%204%20Team%20Logos/Prospect/Foxes%20-%20Midnight.png?v=1780175543"),
+    team("slr-otters", "St. Lawrence River Otters", "SLR", "prospect", "https://phlstats.com/teamlogo/Season%204%20Team%20Logos/Prospect/River%20Otters%20-%20Mango.png?v=1780175543"),
+    team("hqm-mallard", "Hoboken Quacking Mallard", "HQM", "prospect", "https://phlstats.com/teamlogo/Season%204%20Team%20Logos/Prospect/Mallards%20-%20Bagginz.png?v=1780175543"),
+    team("phi-pyros", "Philadelphia Pyros", "PHI", "prospect", "https://phlstats.com/teamlogo/Season%204%20Team%20Logos/Prospect/Pyros%20-%20Dyson.png?v=1780175543"),
+    team("clc-conspiracy", "Crystal Lake Conspiracy", "CLC", "prospect", "https://phlstats.com/teamlogo/Season%204%20Team%20Logos/Prospect/Conspiracy%20-%20geefsneef.png?v=1780175543"),
+    team("sbs-sentinels", "South Boston Sentinels", "SBS", "prospect", "https://phlstats.com/teamlogo/Season%204%20Team%20Logos/Prospect/Sentinels%20-%20Nem,%20Hotpocket.png?v=1780175543"),
+    team("spo-ravens", "Spokane Ravens", "SPO", "prospect", "https://phlstats.com/teamlogo/Season%204%20Team%20Logos/Prospect/Ravens%20-%20Jyler.png?v=1780175543"),
+    team("hbc-caribou", "Hobart Bay Caribou", "HBC", "prospect", "https://phlstats.com/teamlogo/Season%204%20Team%20Logos/Prospect/Hobart%20Bay%20Carribou%20-%20Wrandy.png?v=1780175543"),
+    team("pst-stachios", "Port Stanley Stachios", "PST", "prospect", "https://phlstats.com/teamlogo/Season%204%20Team%20Logos/Prospect/Stachios%20-%20Saveoh.png?v=1780175543"),
   ];
 
   window.PHL_STARTER_DATA = {

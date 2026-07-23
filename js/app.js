@@ -110,7 +110,7 @@
     }
     var division = S.getDivision(team.division);
     el.innerHTML =
-      '<div class="sidebar-team-badge" style="--accent:' + U.colorForId(team.id) + '">' + U.escapeHtml(team.abbr) + "</div>" +
+      '<div class="sidebar-team-badge">' + U.crestHtml(team, "crest-lg") + "</div>" +
       '<div class="sidebar-team-name">' + U.escapeHtml(team.name) + "</div>" +
       '<div class="sidebar-team-sub">GM &middot; ' + U.escapeHtml(division ? division.name : "") + "</div>";
   }

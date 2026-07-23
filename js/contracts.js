@@ -56,7 +56,7 @@
       'Asking price reflects Overall/Potential, this season\'s actual performance, and the division\'s pay scale. Offer below it and there\'s a real chance the player says no.</p>';
 
     html += '<div class="cap-summary-card" style="--accent:' + U.colorForId(team.id) + '">';
-    html += '<div class="team-card-head"><span class="team-badge">' + U.escapeHtml(team.abbr) + '</span><span class="team-name">' + U.escapeHtml(team.name) +
+    html += '<div class="team-card-head">' + U.crestHtml(team) + '<span class="team-name">' + U.escapeHtml(team.name) +
       '</span><span class="pill">' + U.escapeHtml(S.getDivision(team.division).name) + " budget</span></div>";
     html += '<div class="cap-bar cap-bar-lg' + (space < 0 ? " cap-over" : "") + '"><div class="cap-bar-fill" style="width:' + pct + '%"></div></div>';
     html += '<div class="muted">Cap Used: ' + U.formatMoney(used) + " / " + U.formatMoney(cap) + " &middot; Space: " + U.formatMoney(space) + "</div>";

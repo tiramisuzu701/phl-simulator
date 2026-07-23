@@ -5,22 +5,26 @@
   "use strict";
 
   // ---- Categorical palette (validated, see dataviz reference) --------
+  // Brightened for the dark "glow" theme (css/style.css) — these are the
+  // same hues as that file's --series-* tokens, kept in sync so a team's
+  // inline --accent (set from colorForId below) reads consistently with
+  // the rest of the UI.
   var CATEGORICAL = [
-    "#2a78d6", // blue
-    "#eb6834", // orange
-    "#1baf7a", // aqua
-    "#eda100", // yellow
-    "#e87ba4", // magenta
-    "#008300", // green
-    "#4a3aa7", // violet
-    "#e34948", // red
+    "#3987e5", // blue
+    "#ff8a4c", // orange
+    "#22c99a", // aqua
+    "#f0b429", // yellow
+    "#ef7fb0", // magenta
+    "#3fbf3f", // green
+    "#9f8ff0", // violet
+    "#ef6360", // red
   ];
 
   var STATUS = {
-    good: "#0ca30c",
-    warning: "#fab219",
-    serious: "#ec835a",
-    critical: "#d03b3b",
+    good: "#2fce6a",
+    warning: "#f0b429",
+    serious: "#ff8a63",
+    critical: "#ff5c6c",
   };
 
   function colorForIndex(i) {
@@ -113,6 +117,29 @@
     setTimeout(function () {
       URL.revokeObjectURL(url);
     }, 1000);
+  }
+
+  // ---- Team crests (real PHL logos, hotlinked from phlstats.com) --------
+  // Renders an <img> for team.logoUrl with a graceful fallback to a plain
+  // colored abbreviation badge (via CSS, triggered by the onerror handler
+  // below) for teams with no logo on file yet — e.g. a brand-new Expansion
+  // Franchise, or a plain "+ Add Team" league-builder team. sizeClass is
+  // one of "crest-sm" (tables/bracket), "" (default, card badges), or
+  // "crest-lg" (sidebar/team-detail header) — see css/style.css.
+  function crestHtml(team, sizeClass) {
+    if (!team) return "";
+    var color = colorForId(team.id);
+    var abbr = escapeHtml(team.abbr || "?");
+    var classes = "team-crest " + (sizeClass || "");
+    if (team.logoUrl) {
+      return (
+        '<span class="' + classes + '" style="--accent:' + color + '" data-abbr="' + abbr + '" title="' + abbr + '">' +
+        '<img src="' + escapeHtml(team.logoUrl) + '" alt="' + abbr + ' logo" loading="lazy" ' +
+        'onerror="this.parentElement.classList.add(\'crest-fallback\')">' +
+        "</span>"
+      );
+    }
+    return '<span class="' + classes + ' team-crest-plain" style="--accent:' + color + '" title="' + abbr + '">' + abbr + "</span>";
   }
 
   function escapeHtml(str) {
@@ -368,6 +395,7 @@
     avg: avg,
     downloadJSON: downloadJSON,
     escapeHtml: escapeHtml,
+    crestHtml: crestHtml,
     randomName: randomName,
     randomGamertag: randomGamertag,
     ARCHETYPES: ARCHETYPES,

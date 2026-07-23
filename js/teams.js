@@ -49,7 +49,7 @@
           var pct = U.clamp((used / cap) * 100, 0, 100);
           html += '<div class="team-card" style="--accent:' + U.colorForId(t.id) + '">';
           html += '<div class="team-card-head">';
-          html += '<span class="team-badge">' + U.escapeHtml(t.abbr) + '</span>';
+          html += U.crestHtml(t);
           html += '<span class="team-name team-name-link" data-action="view-team" data-id="' + t.id + '" role="button" tabindex="0">' + U.escapeHtml(t.name) + '</span>';
           if (S.isManagedTeam(t.id)) html += '<span class="pill pill-accent">GM</span>';
           if (t.isExpansionTeam) html += '<span class="pill" title="Created at save creation as an Expansion Franchise">Expansion</span>';
