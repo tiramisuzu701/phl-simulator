@@ -20,7 +20,7 @@
   }
 
   function playersInScope() {
-    var players = S.getPlayers().filter(function (p) { return !p.isDraftProspect; });
+    var players = S.getPlayers().filter(function (p) { return !p.isDraftProspect && !p.retired; });
     if (!divFilter) return players;
     return players.filter(function (p) {
       var t = p.teamId ? S.getTeam(p.teamId) : null;
@@ -72,20 +72,48 @@
     html += renderBoard("GAA (lower is better)", leaderboard(goalies, function (p) { return p.stats.gaa; }, 10, { asc: true, min: 3, countFn: function (p) { return p.stats.gp; } }), "GAA", function (p) { return p.stats.gaa; });
     html += "</div>";
 
+    var retiredCount = S.getRetiredPlayers().length;
     html += '<div class="panel-header" style="margin-top:2rem"><h2>Offseason</h2></div>';
-    html += '<div class="form-card"><p class="muted">Season ' + S.getSeason().seasonNumber + " &middot; Phase: " + S.getSeason().phase + '</p>';
-    html += "<p>Starting a new season ages every player by a year, ticks down contracts (expiring players hit free agency), resets team records and player stats, and generates a fresh schedule.</p>";
-    html += '<button class="btn btn-primary" data-action="new-season">Start New Season</button></div>';
+    html += '<div class="form-card"><p class="muted">Season ' + S.getSeason().seasonNumber + " &middot; Phase: " + S.getSeason().phase +
+      (retiredCount ? " &middot; " + retiredCount + " retired legend(s)" : "") + '</p>';
+    html += "<p>Starting a new season quietly ages every active player, begins skill decline past " + S.getSettings().declineStartAge +
+      ", retires players who reach their (hidden, randomized) retirement age, ticks down contracts (expiring players hit free agency), " +
+      "drops in a fresh breakout rookie class, resets records/stats, and builds a new schedule.</p>";
+    html += '<button class="btn btn-primary" data-action="new-season">Start New Season</button> ' +
+      '<button class="btn" data-action="gen-rookies">Generate Rookie Class Only</button></div>';
 
     container.innerHTML = html;
     wireEvents();
   }
 
-  function startNewSeason() {
-    if (!confirm("Start a new season? This ages players, expires contracts, resets records/stats and builds a new schedule.")) return;
+  // Ages every active (non-retired, non-prospect) player by a year, applies
+  // hidden skill decline/growth, and retires anyone past their randomized
+  // retirement age. Returns the list of players who just retired.
+  function ageAndDeclinePlayers() {
+    var settings = S.getSettings();
+    var retired = [];
     S.getPlayers().forEach(function (p) {
-      if (p.isDraftProspect) return;
-      p.age = (p.age || 20) + 1;
+      if (p.isDraftProspect || p.retired) return;
+      p.age = (p.age != null ? p.age : U.generateStartingAge()) + 1;
+      if (p.retirementAge == null) p.retirementAge = U.retirementAgeFor();
+
+      if (p.age >= p.retirementAge) {
+        p.retired = true;
+        p.teamId = null;
+        retired.push(p);
+        return;
+      }
+
+      if (p.age >= settings.declineStartAge) {
+        var dropAmt = U.randInt(1, 3);
+        p.overall = U.clamp(p.overall - dropAmt, 25, 99);
+        p.attributes = U.deriveAttributes(p.overall, p.position, p.archetype);
+      } else if (p.overall < p.potential && Math.random() < 0.55) {
+        // Quiet development toward their ceiling while still young.
+        p.overall = U.clamp(p.overall + U.randInt(1, 2), p.overall, p.potential);
+        p.attributes = U.deriveAttributes(p.overall, p.position, p.archetype);
+      }
+
       if (p.teamId) {
         p.contractYears = (p.contractYears != null ? p.contractYears : 2) - 1;
         if (p.contractYears <= 0) {
@@ -95,9 +123,63 @@
       }
     });
     S.save();
-    var season = S.getSeason();
-    S.updateSeason({ seasonNumber: (season.seasonNumber || 1) + 1 });
+    return retired;
+  }
+
+  // Breakout rookies: lower-overall, wide-spread-potential young players
+  // that enter free agency each season. Restricted (at first signing only)
+  // to Prospect — occasionally Contender — never straight to Pro.
+  function generateRookieClass() {
+    var settings = S.getSettings();
+    var count = settings.rookiesPerSeason || 10;
+    var created = [];
+    for (var i = 0; i < count; i++) {
+      var roll = Math.random();
+      var position = roll < 0.45 ? "F" : roll < 0.8 ? "D" : "G";
+      var overall = U.randInt(40, 65);
+      var potentialRoll = Math.random();
+      var potential;
+      if (potentialRoll < 0.15) potential = U.randInt(85, 97); // boom-or-bust gem
+      else if (potentialRoll < 0.5) potential = U.clamp(overall + U.randInt(15, 30), overall, 90);
+      else potential = U.clamp(overall + U.randInt(2, 14), overall, 80);
+      var archetype = U.randomArchetype(position);
+      var eligibleDivisions = Math.random() < (settings.rookieContenderChance || 0.25)
+        ? ["prospect", "contender"]
+        : ["prospect"];
+      var player = {
+        name: U.randomName(),
+        position: position,
+        archetype: archetype,
+        overall: overall,
+        potential: potential,
+        attributes: U.deriveAttributes(overall, position, archetype),
+        salary: Math.max(U.SALARY_MIN, Math.round((U.salaryAsking(overall, potential) * 0.5) / 500) * 500),
+        contractYears: 2,
+        teamId: null,
+        isDraftProspect: false,
+        eligibleDivisions: eligibleDivisions,
+        isRookieClass: true,
+        age: U.generateRookieAge(),
+        retirementAge: U.retirementAgeFor(),
+        stats: S.freshStatLine(),
+      };
+      created.push(S.addPlayer(player));
+    }
+    return created;
+  }
+
+  function startNewSeason() {
+    if (!confirm("Start a new season? This ages players (some may retire), expires contracts, generates a new breakout rookie class, resets records/stats, and builds a new schedule.")) return;
+    var priorSeasonNumber = S.getSeason().seasonNumber || 1;
+    var retired = ageAndDeclinePlayers();
+    var rookies = generateRookieClass();
+    S.updateSeason({ seasonNumber: priorSeasonNumber + 1 });
     if (window.PHLSchedule) window.PHLSchedule.generateSeasonSchedule();
+    alert(
+      "Season " + priorSeasonNumber + " is in the books.\n" +
+      retired.length + " player(s) retired.\n" +
+      rookies.length + " breakout rookie(s) joined free agency (mostly Prospect-eligible)."
+    );
   }
 
   function wireEvents() {
@@ -110,7 +192,18 @@
       render();
       if (window.PHLApp) window.PHLApp.refresh();
     });
+    container.querySelector('[data-action="gen-rookies"]').addEventListener("click", function () {
+      var rookies = generateRookieClass();
+      render();
+      if (window.PHLApp) window.PHLApp.refresh();
+      alert(rookies.length + " breakout rookie(s) added to free agency.");
+    });
   }
 
-  window.PHLStats = { render: render, startNewSeason: startNewSeason };
+  window.PHLStats = {
+    render: render,
+    startNewSeason: startNewSeason,
+    generateRookieClass: generateRookieClass,
+    ageAndDeclinePlayers: ageAndDeclinePlayers,
+  };
 })();

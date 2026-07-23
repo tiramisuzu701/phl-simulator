@@ -9,14 +9,28 @@
 
   var REPLACEMENT = 50; // fallback rating used when a team lacks players at a spot
 
+  function byOverallDesc(a, b) {
+    return b.overall - a.overall;
+  }
+
+  // Picks `count` players at `position` for the active lineup. If the user
+  // has manually flagged enough players as starters at that position (see
+  // the Players tab), those are used (best-overall-first among them);
+  // otherwise this falls back to simply taking the best players available
+  // at that position, exactly as before. AI-managed teams never set the
+  // `starter` flag, so they always use the fallback automatically.
+  function pickLineupGroup(roster, position, count) {
+    var atPos = roster.filter(function (p) { return p.position === position; });
+    var starters = atPos.filter(function (p) { return !!p.starter; }).sort(byOverallDesc);
+    if (starters.length >= count) return starters.slice(0, count);
+    return atPos.sort(byOverallDesc).slice(0, count);
+  }
+
   function getActiveLineup(teamId) {
     var roster = S.getRoster(teamId);
-    var forwards = roster.filter(function (p) { return p.position === "F"; })
-      .sort(function (a, b) { return b.overall - a.overall; }).slice(0, 2);
-    var defenders = roster.filter(function (p) { return p.position === "D"; })
-      .sort(function (a, b) { return b.overall - a.overall; }).slice(0, 2);
-    var goalies = roster.filter(function (p) { return p.position === "G"; })
-      .sort(function (a, b) { return b.overall - a.overall; });
+    var forwards = pickLineupGroup(roster, "F", 2);
+    var defenders = pickLineupGroup(roster, "D", 2);
+    var goalies = pickLineupGroup(roster, "G", 1);
     var goalie = goalies.length ? goalies[0] : null;
     return { forwards: forwards, defenders: defenders, goalie: goalie };
   }

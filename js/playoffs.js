@@ -1,5 +1,13 @@
-/* PHL Franchise Simulator — playoffs (best-of-3, top 4 per division)
+/* PHL Franchise Simulator — playoffs (best-of-7 series)
  * Global namespace: window.PHLPlayoffs
+ *
+ * Each division declares its own format via division.playoff = { teams, byes }:
+ *   - `teams`: how many teams (by standings) are playoff-eligible at all.
+ *   - `byes`:  how many of those skip straight into the main bracket.
+ * When teams > byes, the remaining seeds play a Wild Card round; winners
+ * fill out the last spot(s) of the main bracket alongside the bye teams.
+ * A team finishing below `teams` in the standings — including an added
+ * expansion team — simply misses the playoffs; no extra round is added.
  */
 (function () {
   "use strict";
@@ -10,6 +18,21 @@
   var Standings = window.PHLStandings;
   var container = null;
   var view = { division: null };
+
+  function getPlayoffConfig(divisionId) {
+    var div = S.getDivision(divisionId);
+    var fallback = S.getSettings().playoffTeamsPerDivision || 4;
+    if (div && div.playoff && div.playoff.teams) return div.playoff;
+    return { teams: fallback, byes: fallback };
+  }
+
+  function roundNameForTeamCount(n) {
+    if (n <= 2) return "Final";
+    if (n === 4) return "Semifinals";
+    if (n === 8) return "Quarterfinals";
+    if (n === 16) return "Round of 16";
+    return "Round of " + n;
+  }
 
   function newSeries(teamAId, teamBId, seedA, seedB) {
     return {
@@ -25,40 +48,90 @@
     };
   }
 
+  // Pairs a seed-ordered list [best...worst] as 1v N, 2v(N-1), ... — the
+  // standard single-elimination reseeding pattern. Assumes an even count;
+  // an odd leftover (only possible with a hand-edited config) is dropped
+  // rather than crashing.
+  function buildBracketRound(seedsArr) {
+    var series = [];
+    var n = seedsArr.length;
+    var half = Math.floor(n / 2);
+    for (var i = 0; i < half; i++) {
+      var hi = seedsArr[i];
+      var lo = seedsArr[n - 1 - i];
+      series.push(newSeries(hi.teamId, lo.teamId, hi.seed, lo.seed));
+    }
+    return { name: roundNameForTeamCount(half * 2), series: series };
+  }
+
+  // Wild Card round: same outer-vs-inner pairing, but tracks an unpaired
+  // middle seed (odd count) so it can be carried forward as an automatic
+  // advance rather than lost.
+  function buildWildcardRound(wildcardSeeds) {
+    var series = [];
+    var n = wildcardSeeds.length;
+    var half = Math.floor(n / 2);
+    for (var i = 0; i < half; i++) {
+      var hi = wildcardSeeds[i];
+      var lo = wildcardSeeds[n - 1 - i];
+      series.push(newSeries(hi.teamId, lo.teamId, hi.seed, lo.seed));
+    }
+    var pendingByeTeamId = n % 2 === 1 ? wildcardSeeds[half].teamId : null;
+    return {
+      round: { name: "Wild Card", series: series, isWildcard: true },
+      pendingByeTeamId: pendingByeTeamId,
+    };
+  }
+
   function startPlayoffs(divisionId) {
-    var n = S.getSettings().playoffTeamsPerDivision || 4;
-    var seeds = Standings.sortedStandings(divisionId).slice(0, n);
-    if (seeds.length < 2) {
+    var cfg = getPlayoffConfig(divisionId);
+    var standings = Standings.sortedStandings(divisionId).slice(0, cfg.teams);
+    if (standings.length < 2) {
       alert("Not enough teams with a completed record in this division yet.");
       return;
     }
-    // Standard bracket: 1v4, 2v3 (works cleanly for n=4; degrades gracefully otherwise)
-    var series = [];
-    for (var i = 0; i < Math.floor(seeds.length / 2); i++) {
-      var high = seeds[i];
-      var low = seeds[seeds.length - 1 - i];
-      series.push(newSeries(high.id, low.id, i + 1, seeds.length - i));
-    }
+    var seedsList = standings.map(function (t, i) {
+      return { teamId: t.id, seed: i + 1 };
+    });
+    var byesCount = Math.min(cfg.byes, seedsList.length);
+    var byeSeeds = seedsList.slice(0, byesCount);
+    var wildcardSeeds = seedsList.slice(byesCount);
+
     var bracket = {
-      seeds: seeds.map(function (t, i) { return { teamId: t.id, seed: i + 1 }; }),
-      rounds: [{ name: seeds.length > 2 ? "Semifinals" : "Final", series: series }],
+      seeds: seedsList,
+      byeTeamIds: byeSeeds.map(function (s) { return s.teamId; }),
+      pendingWildcardByeTeamId: null,
+      rounds: [],
       champion: null,
     };
+
+    if (wildcardSeeds.length >= 2) {
+      var wc = buildWildcardRound(wildcardSeeds);
+      bracket.rounds.push(wc.round);
+      bracket.pendingWildcardByeTeamId = wc.pendingByeTeamId;
+    } else {
+      bracket.rounds.push(buildBracketRound(seedsList));
+    }
+
     var playoffs = S.getSeason().playoffs || {};
     playoffs[divisionId] = bracket;
     S.updateSeason({ phase: "playoffs", playoffs: playoffs });
   }
 
   function seriesIsDecided(series) {
-    return series.winsA >= 2 || series.winsB >= 2;
+    return series.winsA >= 4 || series.winsB >= 4;
   }
+
+  // Best-of-7 home/away pattern: 2-2-1-1-1, higher seed (teamA) hosting
+  // games 1, 2, 5, and 7.
+  var SERIES_HOME_IS_A = [true, true, false, false, true, false, true];
 
   function simulateSeriesGame(series) {
     if (seriesIsDecided(series)) return null;
     var gameNum = series.games.length + 1;
-    // Games 1 & 3 at the higher seed (teamA); game 2 at the lower seed (teamB)
-    var homeId = gameNum === 2 ? series.teamBId : series.teamAId;
-    var awayId = gameNum === 2 ? series.teamAId : series.teamBId;
+    var homeIsASlot = SERIES_HOME_IS_A[gameNum - 1];
+    var homeId = homeIsASlot ? series.teamAId : series.teamBId;
+    var awayId = homeIsASlot ? series.teamBId : series.teamAId;
     var result = Sim.simulateGame(homeId, awayId);
     var homeIsA = homeId === series.teamAId;
     var aScore = homeIsA ? result.homeScore : result.awayScore;
@@ -90,22 +163,40 @@
     var lastRound = bracket.rounds[bracket.rounds.length - 1];
     var allDecided = lastRound.series.every(seriesIsDecided);
     if (!allDecided) return;
+
+    var seedOf = {};
+    bracket.seeds.forEach(function (s) { seedOf[s.teamId] = s.seed; });
+
+    if (lastRound.isWildcard) {
+      // Wild Card winners fill the remaining bracket slot(s) right after
+      // the bye teams, in the order their games were listed.
+      var wcWinners = lastRound.series.map(function (s) { return s.winnerId; });
+      var combinedIds = bracket.byeTeamIds.concat(wcWinners);
+      if (bracket.pendingWildcardByeTeamId) combinedIds.push(bracket.pendingWildcardByeTeamId);
+      var combinedSeeded = combinedIds.map(function (id, idx) {
+        return { teamId: id, seed: seedOf[id] != null ? seedOf[id] : idx + 1 };
+      });
+      bracket.rounds.push(buildBracketRound(combinedSeeded));
+      S.save();
+      return;
+    }
+
     if (lastRound.series.length === 1) {
       bracket.champion = lastRound.series[0].winnerId;
       S.save();
       return;
     }
-    // Build next round from winners, pairing in bracket order
+
+    // Standard reseed: winners mirrored in bracket order (1/8-4/5 side,
+    // 2/7-3/6 side, etc.) so bracket integrity holds round over round.
     var winners = lastRound.series.map(function (s) { return s.winnerId; });
-    var seedOf = {};
-    bracket.seeds.forEach(function (s) { seedOf[s.teamId] = s.seed; });
     var nextSeries = [];
     for (var i = 0; i < winners.length / 2; i++) {
       var a = winners[i];
       var b = winners[winners.length - 1 - i];
       nextSeries.push(newSeries(a, b, seedOf[a], seedOf[b]));
     }
-    bracket.rounds.push({ name: nextSeries.length === 1 ? "Final" : "Round " + (bracket.rounds.length + 1), series: nextSeries });
+    bracket.rounds.push({ name: roundNameForTeamCount(nextSeries.length * 2), series: nextSeries });
     S.save();
   }
 
@@ -131,11 +222,14 @@
     var html = '<div class="panel-header"><h2>Playoffs</h2></div>';
     html += '<div class="tab-strip">';
     divisions.forEach(function (d) {
-      html += '<button class="chip' + (view.division === d.id ? " chip-active" : "") + '" data-division="' + d.id + '">' + U.escapeHtml(d.name) + "</button>";
+      var cfg = getPlayoffConfig(d.id);
+      html += '<button class="chip' + (view.division === d.id ? " chip-active" : "") + '" data-division="' + d.id + '">' +
+        U.escapeHtml(d.name) + ' <span class="muted">(top ' + cfg.teams + ")</span></button>";
     });
     html += "</div>";
 
     var div = view.division;
+    var cfg = getPlayoffConfig(div);
     var bracket = (S.getSeason().playoffs || {})[div];
     var regularDone = Sched.isRegularSeasonComplete(div);
 
@@ -144,7 +238,10 @@
       if (!regularDone) {
         html += "<p>The regular season isn't finished for this division yet. Finish it in the Schedule tab, then come back to start the playoffs.</p>";
       } else {
-        html += '<p>Regular season complete — ready to set the bracket.</p>' +
+        var formatNote = cfg.byes < cfg.teams
+          ? "Top " + cfg.byes + " get a bye; seeds " + (cfg.byes + 1) + "–" + cfg.teams + " play a Wild Card round for the last spot(s)."
+          : "Top " + cfg.teams + " make it, straight into the bracket.";
+        html += '<p>Regular season complete — ready to set the bracket. <span class="muted">' + formatNote + '</span></p>' +
           '<button class="btn btn-primary" data-action="start-playoffs" data-division="' + div + '">Start Playoffs</button>';
       }
       html += "</div>";
@@ -187,6 +284,12 @@
       });
       html += "</div></div>";
     });
+
+    if (bracket.byeTeamIds && bracket.byeTeamIds.length && bracket.rounds.length && bracket.rounds[0].isWildcard) {
+      html += '<p class="muted small">Byes into the main bracket: ' +
+        bracket.byeTeamIds.map(function (id) { var t = S.getTeam(id); return U.escapeHtml(t ? t.name : "?"); }).join(", ") +
+        "</p>";
+    }
 
     container.innerHTML = html;
     wireEvents();
@@ -247,5 +350,6 @@
     render: render,
     startPlayoffs: startPlayoffs,
     simulateFullBracket: simulateFullBracket,
+    getPlayoffConfig: getPlayoffConfig,
   };
 })();

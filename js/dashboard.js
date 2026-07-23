@@ -16,8 +16,24 @@
     var players = S.getPlayers().filter(function (p) { return !p.isDraftProspect; });
     var rostered = players.filter(function (p) { return p.teamId; });
     var freeAgents = S.getFreeAgents();
+    var franchise = S.getFranchise();
+    var startupDraft = S.getStartupDraft();
 
     var html = '<div class="panel-header"><h2>Dashboard</h2></div>';
+
+    if (!franchise.teamId || startupDraft.status !== "complete") {
+      html += '<div class="empty-state"><p>' +
+        (!franchise.teamId
+          ? "Pick your division and team to get started."
+          : startupDraft.status === "active"
+          ? "Your Startup Draft is in progress."
+          : "You're all set up — begin the Startup Draft to fill out every team's roster.") +
+        '</p><button class="btn btn-primary" data-goto="startup">Go to Startup Draft</button></div>';
+    } else {
+      var myTeam = S.getTeam(franchise.teamId);
+      var myDiv = S.getDivision(franchise.divisionId);
+      html += '<p class="muted small">GM of <strong>' + U.escapeHtml(myTeam ? myTeam.name : "?") + "</strong> (" + U.escapeHtml(myDiv ? myDiv.name : "?") + ")</p>";
+    }
     html += '<div class="stat-tile-row">';
     html += statTile("Season", season.seasonNumber || 1);
     html += statTile("Phase", capitalize(season.phase || "offseason"));
@@ -49,6 +65,7 @@
     html += "</div>";
 
     html += '<div class="form-card"><h3>Quick Actions</h3><div class="action-row">';
+    html += '<button class="btn" data-goto="startup">Startup Draft</button>';
     html += '<button class="btn" data-goto="schedule">Schedule &amp; Sim Games</button>';
     html += '<button class="btn" data-goto="standings">View Standings</button>';
     html += '<button class="btn" data-goto="playoffs">Playoffs</button>';

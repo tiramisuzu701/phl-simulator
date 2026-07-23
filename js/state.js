@@ -31,6 +31,7 @@
       }
     }
     data = deepClone(window.PHL_STARTER_DATA);
+    migrate(data);
     return data;
   }
 
@@ -43,9 +44,18 @@
     if (!d.players) d.players = [];
     if (!d.teams) d.teams = [];
     if (!d.divisions) d.divisions = deepClone(starter.divisions);
+    if (!d.franchise) d.franchise = deepClone(starter.franchise);
+    if (!d.startupDraft) d.startupDraft = deepClone(starter.startupDraft);
     for (var key in starter.settings) {
       if (!(key in d.settings)) d.settings[key] = starter.settings[key];
     }
+    d.players.forEach(function (p) {
+      if (!p.attributes) p.attributes = U.deriveAttributes(p.overall, p.position, p.archetype);
+      if (p.age == null) p.age = U.generateStartingAge();
+      if (p.retirementAge == null) p.retirementAge = U.retirementAgeFor();
+      if (!p.stats) p.stats = freshStatLine();
+      if (p.starter == null) p.starter = false;
+    });
   }
 
   function save() {
@@ -58,6 +68,7 @@
 
   function resetToStarter() {
     data = deepClone(window.PHL_STARTER_DATA);
+    migrate(data);
     save();
   }
 
@@ -111,20 +122,32 @@
   }
   function getRoster(teamId) {
     return data.players.filter(function (p) {
-      return p.teamId === teamId;
+      return p.teamId === teamId && !p.retired;
     });
   }
   function getFreeAgents() {
     // Rostered = has a teamId. Draft pool players also have no teamId but
     // are flagged isDraftProspect while draft.active is true; once the
     // draft ends prospects left undrafted become free agents automatically.
+    // Startup draft pool players (see startupDraft.js) are excluded the
+    // same way until that one-time draft finishes with them.
     return data.players.filter(function (p) {
-      return !p.teamId && !p.isDraftProspect;
+      return !p.teamId && !p.isDraftProspect && !p.startupDraftPool && !p.retired;
+    });
+  }
+  function getRetiredPlayers() {
+    return data.players.filter(function (p) {
+      return !!p.retired;
     });
   }
   function getDraftPool() {
     return data.players.filter(function (p) {
       return p.isDraftProspect;
+    });
+  }
+  function getStartupPool() {
+    return data.players.filter(function (p) {
+      return !!p.startupDraftPool;
     });
   }
 
@@ -162,7 +185,9 @@
   function addPlayer(player) {
     player.id = player.id || U.uid("player");
     if (player.stats == null) player.stats = freshStatLine();
-    if (player.salary == null) player.salary = U.salaryForOverall(player.overall || 60);
+    if (player.salary == null) player.salary = U.salaryAsking(player.overall || 60, player.potential || player.overall || 60);
+    if (player.age == null) player.age = U.generateStartingAge();
+    if (player.retirementAge == null) player.retirementAge = U.retirementAgeFor();
     data.players.push(player);
     save();
     return player;
@@ -241,14 +266,41 @@
     save();
   }
 
+  // ---------------- Franchise (GM's chosen division/team) ----------------
+  function getFranchise() {
+    return data.franchise;
+  }
+  function setFranchise(divisionId, teamId) {
+    data.franchise.divisionId = divisionId;
+    data.franchise.teamId = teamId;
+    save();
+  }
+
+  // ---------------- Startup Draft (one-time, save-start) ----------------
+  function getStartupDraft() {
+    return data.startupDraft;
+  }
+  function updateStartupDraft(patch) {
+    Object.assign(data.startupDraft, patch);
+    save();
+  }
+
   // ---------------- Cap helpers ----------------
+  // Salary cap is per-division (top divisions have bigger budgets), not a
+  // single league-wide number.
+  function capForTeam(teamId) {
+    var t = getTeam(teamId);
+    if (!t) return 0;
+    var div = getDivision(t.division);
+    return div && div.salaryCap != null ? div.salaryCap : 1000000;
+  }
   function capUsed(teamId) {
     return getRoster(teamId).reduce(function (sum, p) {
       return sum + (p.salary || 0);
     }, 0);
   }
   function capSpace(teamId) {
-    return U.round1(getSettings().salaryCap - capUsed(teamId));
+    return capForTeam(teamId) - capUsed(teamId);
   }
 
   window.PHLState = {
@@ -268,6 +320,8 @@
     getRoster: getRoster,
     getFreeAgents: getFreeAgents,
     getDraftPool: getDraftPool,
+    getStartupPool: getStartupPool,
+    getRetiredPlayers: getRetiredPlayers,
     addTeam: addTeam,
     updateTeam: updateTeam,
     deleteTeam: deleteTeam,
@@ -275,6 +329,7 @@
     updatePlayer: updatePlayer,
     deletePlayer: deletePlayer,
     freshStatLine: freshStatLine,
+    capForTeam: capForTeam,
     capUsed: capUsed,
     capSpace: capSpace,
     getSeason: getSeason,
@@ -285,5 +340,9 @@
     resetPlayerSeasonStats: resetPlayerSeasonStats,
     getDraft: getDraft,
     updateDraft: updateDraft,
+    getFranchise: getFranchise,
+    setFranchise: setFranchise,
+    getStartupDraft: getStartupDraft,
+    updateStartupDraft: updateStartupDraft,
   };
 })();

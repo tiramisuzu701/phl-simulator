@@ -32,21 +32,24 @@
   function generateProspect() {
     var roll = Math.random();
     var position = roll < 0.45 ? "F" : roll < 0.8 ? "D" : "G";
-    // Prospects skew lower/mid with occasional high-upside gems
+    // Prospects skew lower/mid overall with a wide spread of potential —
+    // occasional high-upside gems, occasional low-ceiling depth players.
     var overall = Math.random() < 0.12 ? U.randInt(78, 92) : U.randInt(45, 78);
-    var offense = U.clamp(overall + U.randInt(-10, 10) + (position === "F" ? 3 : -3), 40, 99);
-    var defense = U.clamp(overall + U.randInt(-10, 10) + (position === "D" ? 3 : -3), 40, 99);
-    var goaltending = position === "G" ? U.clamp(overall + U.randInt(-8, 8), 40, 99) : 40;
+    var potential = U.clamp(overall + U.randInt(0, 22), overall, 99);
+    var archetype = U.randomArchetype(position);
     return {
       name: U.randomName(),
       position: position,
-      age: U.randInt(18, 21),
+      archetype: archetype,
       overall: overall,
-      attributes: { offense: offense, defense: defense, goaltending: goaltending },
-      salary: Math.round(U.salaryForOverall(overall) * 0.6 * 2) / 2,
+      potential: potential,
+      attributes: U.deriveAttributes(overall, position, archetype),
+      salary: Math.max(U.SALARY_MIN, Math.round(U.salaryAsking(overall, potential) * 0.6 / 500) * 500), // entry-level discount, never below league baseline
       contractYears: 3,
       teamId: null,
       isDraftProspect: true,
+      age: U.randInt(18, 21),
+      retirementAge: U.retirementAgeFor(),
       stats: S.freshStatLine(),
     };
   }
@@ -159,15 +162,15 @@
       html += "</div>";
 
       html += '<div class="filter-bar"><select id="draft-pos-filter">' +
-        '<option value="">All Positions</option><option value="F">Forward</option><option value="D">Defender</option><option value="G">Goalie</option>' +
+        '<option value="">All Positions</option><option value="F">Forward</option><option value="D">Defense</option><option value="G">Goalie</option>' +
         "</select></div>";
 
       var pool = poolPlayers().sort(function (a, b) { return b.overall - a.overall; });
       if (posFilter) pool = pool.filter(function (p) { return p.position === posFilter; });
-      html += '<table class="data-table"><thead><tr><th>Prospect</th><th>Pos</th><th>Age</th><th>OVR</th><th>OFF</th><th>DEF</th><th>G</th><th></th></tr></thead><tbody>';
+      html += '<table class="data-table"><thead><tr><th>Prospect</th><th>Pos</th><th>Archetype</th><th>OVR</th><th>POT</th><th></th></tr></thead><tbody>';
       pool.forEach(function (p) {
-        html += "<tr><td>" + U.escapeHtml(p.name) + "</td><td>" + p.position + "</td><td>" + p.age + "</td><td><strong>" + p.overall + "</strong></td>" +
-          "<td>" + p.attributes.offense + "</td><td>" + p.attributes.defense + "</td><td>" + (p.position === "G" ? p.attributes.goaltending : "&mdash;") + "</td>" +
+        html += "<tr><td>" + U.escapeHtml(p.name) + "</td><td>" + p.position + "</td><td>" + U.escapeHtml(p.archetype || "") + "</td><td><strong>" + p.overall + "</strong></td>" +
+          "<td>" + p.potential + "</td>" +
           '<td><button class="btn btn-sm btn-primary" data-action="pick" data-id="' + p.id + '">Draft</button></td></tr>';
       });
       html += "</tbody></table>";

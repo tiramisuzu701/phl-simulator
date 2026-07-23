@@ -9,6 +9,7 @@
 
   var modules = {
     dashboard: window.PHLDashboard,
+    startup: window.PHLStartupDraft,
     teams: window.PHLTeams,
     players: window.PHLPlayers,
     schedule: window.PHLSchedule,
@@ -68,7 +69,12 @@
         showTab(btn.dataset.tab);
       });
     });
-    showTab("dashboard");
+    // New/fresh saves (no GM team chosen, startup draft not finished yet)
+    // open straight to the Startup Draft tab so it's the natural first step.
+    var franchise = S.getFranchise();
+    var startupDraft = S.getStartupDraft();
+    var needsSetup = (!franchise || !franchise.teamId) || (startupDraft && startupDraft.status !== "complete");
+    showTab(needsSetup ? "startup" : "dashboard");
   }
 
   window.PHLApp = { showTab: showTab, refresh: refresh, refreshAll: refreshAll };

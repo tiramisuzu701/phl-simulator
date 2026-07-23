@@ -16,14 +16,25 @@
     var html = "";
     html += '<div class="panel-header"><h2>Divisions &amp; Teams</h2>' +
       '<button class="btn btn-primary" data-action="new-team">+ Add Team</button></div>';
+    html += '<p class="muted small">This also doubles as your expansion-team tool — add a new team ' +
+      'to any division mid-league. It\'ll show up in standings/schedules once you next generate or ' +
+      'regenerate that division\'s schedule. Playoff cutoffs are always "top N by standings," so a ' +
+      'newly added team that finishes outside a division\'s playoff line just misses out, same as ' +
+      'any other team.</p>';
 
     divisions.forEach(function (div) {
       var teams = S.getTeams(div.id).slice().sort(function (a, b) {
         return a.name.localeCompare(b.name);
       });
+      var playoffCfg = (div.playoff && div.playoff.teams) ? div.playoff : { teams: S.getSettings().playoffTeamsPerDivision || 4, byes: S.getSettings().playoffTeamsPerDivision || 4 };
+      var playoffNote = playoffCfg.byes < playoffCfg.teams
+        ? "Playoffs: top " + playoffCfg.teams + " (" + playoffCfg.byes + " bye + wild card)"
+        : "Playoffs: top " + playoffCfg.teams;
       html += '<div class="division-block">';
       html += '<h3 class="division-title">' + U.escapeHtml(div.name) +
-        ' <span class="muted">Division &middot; Tier ' + div.tier + '</span></h3>';
+        ' <span class="muted">Division &middot; Tier ' + div.tier +
+        ' &middot; Cap ' + U.formatMoney(div.salaryCap) +
+        ' &middot; ' + playoffNote + '</span></h3>';
       if (!teams.length) {
         html += '<p class="muted">No teams yet in this division.</p>';
       } else {
@@ -31,7 +42,7 @@
         teams.forEach(function (t) {
           var roster = S.getRoster(t.id);
           var used = S.capUsed(t.id);
-          var cap = S.getSettings().salaryCap;
+          var cap = S.capForTeam(t.id);
           var pct = U.clamp((used / cap) * 100, 0, 100);
           html += '<div class="team-card" style="--accent:' + U.colorForId(t.id) + '">';
           html += '<div class="team-card-head">';
@@ -43,7 +54,7 @@
             t.wins + '-' + t.losses + '-' + t.otLosses +
             ' &middot; ' + t.points + ' pts</div>';
           html += '<div class="cap-bar' + (used > cap ? ' cap-over' : '') + '"><div class="cap-bar-fill" style="width:' + pct + '%"></div></div>';
-          html += '<div class="team-card-cap muted">Cap: ' + U.round1(used) + ' / ' + cap + (used > cap ? ' <span class="pill pill-warn">over</span>' : '') + '</div>';
+          html += '<div class="team-card-cap muted">Cap: ' + U.formatMoney(used) + ' / ' + U.formatMoney(cap) + (used > cap ? ' <span class="pill pill-warn">over</span>' : '') + '</div>';
           html += '<div class="team-card-actions">';
           html += '<button class="btn btn-sm" data-action="edit-team" data-id="' + t.id + '">Edit</button>';
           html += '<button class="btn btn-sm btn-danger" data-action="delete-team" data-id="' + t.id + '">Delete</button>';

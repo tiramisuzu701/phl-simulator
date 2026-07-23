@@ -1,5 +1,12 @@
 /* PHL Franchise Simulator — Players editor (roster database)
  * Global namespace: window.PHLPlayers
+ *
+ * Visible player fields are intentionally simple: Nametag, Position,
+ * Archetype, Overall, Potential, Team, Salary, Contract Years. Age is a
+ * hidden internal mechanic (see utils.js) and is never shown or editable
+ * here. The offense/defense/goaltending numbers the sim engine actually
+ * uses are derived from Overall + Position + Archetype (utils.deriveAttributes)
+ * rather than entered by hand.
  */
 (function () {
   "use strict";
@@ -25,7 +32,7 @@
       "</div></div>";
 
     html += '<div class="filter-bar">';
-    html += '<select id="filt-pool"><option value="roster">On a Team</option><option value="fa">Free Agents</option><option value="pool">Draft Pool</option><option value="all">All Players</option></select>';
+    html += '<select id="filt-pool"><option value="roster">On a Team</option><option value="fa">Free Agents</option><option value="pool">Draft Pool</option><option value="startup">Startup Draft Pool</option><option value="retired">Retired</option><option value="all">All Players</option></select>';
     html += '<select id="filt-division"><option value="">All Divisions</option>';
     divisions.forEach(function (d) {
       html += '<option value="' + d.id + '">' + U.escapeHtml(d.name) + "</option>";
@@ -36,7 +43,7 @@
       html += '<option value="' + t.id + '">' + U.escapeHtml(t.name) + "</option>";
     });
     html += '</select>';
-    html += '<select id="filt-position"><option value="">All Positions</option><option value="F">Forward</option><option value="D">Defender</option><option value="G">Goalie</option></select>';
+    html += '<select id="filt-position"><option value="">All Positions</option><option value="F">Forward</option><option value="D">Defense</option><option value="G">Goalie</option></select>';
     html += "</div>";
 
     html += '<div id="player-form-panel"></div>';
@@ -54,9 +61,12 @@
 
   function currentList() {
     var list = S.getPlayers().slice();
-    if (filters.pool === "roster") list = list.filter(function (p) { return !!p.teamId; });
-    else if (filters.pool === "fa") list = list.filter(function (p) { return !p.teamId && !p.isDraftProspect; });
+    if (filters.pool === "roster") list = list.filter(function (p) { return !!p.teamId && !p.retired; });
+    else if (filters.pool === "fa") list = list.filter(function (p) { return !p.teamId && !p.isDraftProspect && !p.startupDraftPool && !p.retired; });
     else if (filters.pool === "pool") list = list.filter(function (p) { return !!p.isDraftProspect; });
+    else if (filters.pool === "startup") list = list.filter(function (p) { return !!p.startupDraftPool; });
+    else if (filters.pool === "retired") list = list.filter(function (p) { return !!p.retired; });
+    else list = list.filter(function (p) { return !p.retired; }); // "all" still hides retired legends by default
     if (filters.division) {
       list = list.filter(function (p) {
         var t = p.teamId ? S.getTeam(p.teamId) : null;
@@ -77,24 +87,28 @@
       return;
     }
     var html = '<table class="data-table"><thead><tr>' +
-      "<th>Name</th><th>Pos</th><th>Team</th><th>Age</th><th>OVR</th>" +
-      "<th>OFF</th><th>DEF</th><th>G</th><th>Salary</th><th>Yrs</th><th>Status</th><th></th>" +
+      "<th>Nametag</th><th>Pos</th><th>Archetype</th><th>Team</th><th>OVR</th><th>POT</th>" +
+      "<th>Salary</th><th>Yrs</th><th>Status</th><th>Lineup</th><th></th>" +
       "</tr></thead><tbody>";
     list.forEach(function (p) {
       var t = p.teamId ? S.getTeam(p.teamId) : null;
-      var status = p.isDraftProspect ? "Draft Pool" : t ? "Rostered" : "Free Agent";
+      var status = p.retired ? "Retired" : p.isDraftProspect ? "Draft Pool" : p.startupDraftPool ? "Startup Draft Pool" : t ? "Rostered" : "Free Agent";
       html += "<tr>";
       html += "<td>" + U.escapeHtml(p.name) + "</td>";
       html += "<td>" + p.position + "</td>";
+      html += "<td>" + U.escapeHtml(p.archetype || "") + "</td>";
       html += "<td>" + (t ? U.escapeHtml(t.abbr) : "&mdash;") + "</td>";
-      html += "<td>" + (p.age || "&mdash;") + "</td>";
       html += '<td><strong>' + p.overall + "</strong></td>";
-      html += "<td>" + p.attributes.offense + "</td>";
-      html += "<td>" + p.attributes.defense + "</td>";
-      html += "<td>" + (p.position === "G" ? p.attributes.goaltending : "&mdash;") + "</td>";
-      html += "<td>" + U.round1(p.salary) + "</td>";
+      html += "<td>" + p.potential + "</td>";
+      html += "<td>" + U.formatMoney(p.salary) + "</td>";
       html += "<td>" + (p.contractYears != null ? p.contractYears : "&mdash;") + "</td>";
       html += '<td><span class="pill">' + status + "</span></td>";
+      if (t && !p.retired) {
+        html += '<td><button class="btn btn-sm ' + (p.starter ? "btn-primary" : "") + '" data-action="toggle-starter" data-id="' + p.id + '">' +
+          (p.starter ? "Starter" : "Bench") + "</button></td>";
+      } else {
+        html += "<td>&mdash;</td>";
+      }
       html += '<td class="row-actions">' +
         '<button class="btn btn-sm" data-action="edit-player" data-id="' + p.id + '">Edit</button>' +
         '<button class="btn btn-sm btn-danger" data-action="delete-player" data-id="' + p.id + '">Del</button>' +
@@ -102,6 +116,7 @@
       html += "</tr>";
     });
     html += "</tbody></table>";
+    html += '<p class="muted small">Lineup: click a rostered player\'s Starter/Bench button to set who plays. If a team doesn\'t have enough starters manually set at a position, the simulator automatically falls back to its best available players there — nothing breaks if you never touch this.</p>';
     wrap.innerHTML = html;
 
     wrap.querySelectorAll('[data-action="edit-player"]').forEach(function (b) {
@@ -117,6 +132,13 @@
           renderTable();
           if (window.PHLApp) window.PHLApp.refresh();
         }
+      });
+    });
+    wrap.querySelectorAll('[data-action="toggle-starter"]').forEach(function (b) {
+      b.addEventListener("click", function () {
+        var p = S.getPlayer(b.dataset.id);
+        if (p) S.updatePlayer(p.id, { starter: !p.starter });
+        renderTable();
       });
     });
   }
@@ -150,6 +172,12 @@
     });
   }
 
+  function archetypeOptionsHtml(position, selected) {
+    return U.archetypesFor(position).map(function (a) {
+      return '<option value="' + U.escapeHtml(a.name) + '"' + (a.name === selected ? " selected" : "") + ">" + U.escapeHtml(a.name) + "</option>";
+    }).join("");
+  }
+
   function showForm(player) {
     var panel = container.querySelector("#player-form-panel");
     var isEdit = !!player;
@@ -157,10 +185,10 @@
       id: "",
       name: "",
       position: "F",
-      age: 24,
+      archetype: U.randomArchetype("F"),
       overall: 70,
-      attributes: { offense: 70, defense: 65, goaltending: 40 },
-      salary: U.salaryForOverall(70),
+      potential: 75,
+      salary: U.salaryAsking(70, 75),
       contractYears: 2,
       teamId: "",
       isDraftProspect: false,
@@ -170,18 +198,16 @@
     var html = '<div class="form-card">';
     html += "<h3>" + (isEdit ? "Edit Player" : "Add Player") + "</h3>";
     html += '<div class="form-grid">';
-    html += '<label>Name<input type="text" id="pf-name" value="' + U.escapeHtml(player.name) + '"></label>';
+    html += '<label>Nametag<input type="text" id="pf-name" value="' + U.escapeHtml(player.name) + '"></label>';
     html += '<label>Position<select id="pf-position">' +
       '<option value="F"' + (player.position === "F" ? " selected" : "") + ">Forward</option>" +
-      '<option value="D"' + (player.position === "D" ? " selected" : "") + ">Defender</option>" +
+      '<option value="D"' + (player.position === "D" ? " selected" : "") + ">Defense</option>" +
       '<option value="G"' + (player.position === "G" ? " selected" : "") + ">Goalie</option>" +
       "</select></label>";
-    html += '<label>Age<input type="number" id="pf-age" min="16" max="45" value="' + player.age + '"></label>';
-    html += '<label>Overall (40-99)<input type="number" id="pf-overall" min="40" max="99" value="' + player.overall + '"></label>';
-    html += '<label>Offense (40-99)<input type="number" id="pf-offense" min="40" max="99" value="' + player.attributes.offense + '"></label>';
-    html += '<label>Defense (40-99)<input type="number" id="pf-defense" min="40" max="99" value="' + player.attributes.defense + '"></label>';
-    html += '<label>Goaltending (40-99)<input type="number" id="pf-goaltending" min="40" max="99" value="' + player.attributes.goaltending + '"></label>';
-    html += '<label>Salary (cap units)<input type="number" id="pf-salary" min="0" step="0.5" value="' + player.salary + '"></label>';
+    html += '<label>Archetype<select id="pf-archetype">' + archetypeOptionsHtml(player.position, player.archetype) + "</select></label>";
+    html += '<label>Overall (1-99)<input type="number" id="pf-overall" min="1" max="99" value="' + player.overall + '"></label>';
+    html += '<label>Potential (1-99)<input type="number" id="pf-potential" min="1" max="99" value="' + player.potential + '"></label>';
+    html += '<label>Salary ($/yr)<input type="number" id="pf-salary" min="0" step="500" value="' + player.salary + '"></label>';
     html += '<label>Contract years<input type="number" id="pf-years" min="0" max="8" value="' + (player.contractYears != null ? player.contractYears : 2) + '"></label>';
     html += '<label>Team<select id="pf-team"><option value="">Free Agent</option>';
     teams.forEach(function (t) {
@@ -189,17 +215,21 @@
     });
     html += "</select></label>";
     html += "</div>";
-    html += '<p class="muted">Tip: click "Auto" to set salary from the overall rating using the league\'s standard curve.</p>';
+    html += '<p class="muted small">Age is tracked internally (PHL doesn\'t publish ages) and quietly drives skill decline after ~' + S.getSettings().declineStartAge + ' and retirement in the low-to-mid 30s — nothing to fill in here.</p>';
     html += '<div class="form-actions">';
-    html += '<button class="btn" data-action="auto-salary">Auto Salary</button>';
+    html += '<button class="btn" data-action="auto-salary">Auto Price from OVR/POT</button>';
     html += '<button class="btn btn-primary" data-action="save-player">' + (isEdit ? "Save" : "Add Player") + "</button>";
     html += '<button class="btn" data-action="cancel-player">Cancel</button>';
     html += "</div></div>";
     panel.innerHTML = html;
 
+    panel.querySelector("#pf-position").addEventListener("change", function (e) {
+      panel.querySelector("#pf-archetype").innerHTML = archetypeOptionsHtml(e.target.value, null);
+    });
     panel.querySelector('[data-action="auto-salary"]').addEventListener("click", function () {
       var ovr = parseInt(panel.querySelector("#pf-overall").value, 10) || 60;
-      panel.querySelector("#pf-salary").value = U.salaryForOverall(ovr);
+      var pot = parseInt(panel.querySelector("#pf-potential").value, 10) || ovr;
+      panel.querySelector("#pf-salary").value = U.salaryAsking(ovr, pot);
     });
     panel.querySelector('[data-action="cancel-player"]').addEventListener("click", function () {
       panel.innerHTML = "";
@@ -207,19 +237,21 @@
     panel.querySelector('[data-action="save-player"]').addEventListener("click", function () {
       var name = panel.querySelector("#pf-name").value.trim();
       if (!name) {
-        alert("Player name is required.");
+        alert("Player nametag is required.");
         return;
       }
+      var position = panel.querySelector("#pf-position").value;
+      var overall = U.clamp(parseInt(panel.querySelector("#pf-overall").value, 10) || 60, 1, 99);
+      var potential = U.clamp(parseInt(panel.querySelector("#pf-potential").value, 10) || overall, 1, 99);
+      if (potential < overall) potential = overall; // potential is a ceiling, never below current overall
+      var archetype = panel.querySelector("#pf-archetype").value;
       var patch = {
         name: name,
-        position: panel.querySelector("#pf-position").value,
-        age: parseInt(panel.querySelector("#pf-age").value, 10) || null,
-        overall: U.clamp(parseInt(panel.querySelector("#pf-overall").value, 10) || 60, 40, 99),
-        attributes: {
-          offense: U.clamp(parseInt(panel.querySelector("#pf-offense").value, 10) || 60, 40, 99),
-          defense: U.clamp(parseInt(panel.querySelector("#pf-defense").value, 10) || 60, 40, 99),
-          goaltending: U.clamp(parseInt(panel.querySelector("#pf-goaltending").value, 10) || 40, 40, 99),
-        },
+        position: position,
+        archetype: archetype,
+        overall: overall,
+        potential: potential,
+        attributes: U.deriveAttributes(overall, position, archetype),
         salary: parseFloat(panel.querySelector("#pf-salary").value) || 0,
         contractYears: parseInt(panel.querySelector("#pf-years").value, 10) || 0,
         teamId: panel.querySelector("#pf-team").value || null,
@@ -229,6 +261,8 @@
         S.updatePlayer(player.id, patch);
       } else {
         patch.stats = S.freshStatLine();
+        patch.age = U.generateStartingAge();
+        patch.retirementAge = U.retirementAgeFor();
         S.addPlayer(patch);
       }
       panel.innerHTML = "";
@@ -257,19 +291,21 @@
 
   function addGeneratedPlayer(teamId, position) {
     var overall = U.randInt(52, 88);
-    var offense = U.clamp(overall + U.randInt(-8, 8) + (position === "F" ? 4 : -2), 40, 99);
-    var defense = U.clamp(overall + U.randInt(-8, 8) + (position === "D" ? 4 : -2), 40, 99);
-    var goaltending = position === "G" ? U.clamp(overall + U.randInt(-6, 6), 40, 99) : 40;
+    var potential = U.clamp(overall + U.randInt(0, 14), overall, 99);
+    var archetype = U.randomArchetype(position);
     var player = {
       name: U.randomName(),
       position: position,
-      age: U.randInt(18, 34),
+      archetype: archetype,
       overall: overall,
-      attributes: { offense: offense, defense: defense, goaltending: goaltending },
-      salary: U.salaryForOverall(overall),
+      potential: potential,
+      attributes: U.deriveAttributes(overall, position, archetype),
+      salary: U.salaryAsking(overall, potential),
       contractYears: U.randInt(1, 4),
       teamId: teamId,
       isDraftProspect: false,
+      age: U.generateStartingAge(),
+      retirementAge: U.retirementAgeFor(),
       stats: S.freshStatLine(),
     };
     S.addPlayer(player);
