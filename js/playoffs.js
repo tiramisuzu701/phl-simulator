@@ -140,6 +140,11 @@
       bracket.rounds.push(buildBracketRound(seedsList));
     }
 
+    // Playoff stats (js/stats.js "Playoff Leaders", playoff box scores) are
+    // scoped to the playoffs currently underway — wipe last cycle's numbers
+    // for everyone currently rostered in this division.
+    S.resetPlayoffStatsForDivision(divisionId);
+
     var playoffs = S.getSeason().playoffs || {};
     playoffs[divisionId] = bracket;
     S.updateSeason({ phase: "playoffs", playoffs: playoffs });
@@ -153,13 +158,14 @@
   // games 1, 2, 5, and 7.
   var SERIES_HOME_IS_A = [true, true, false, false, true, false, true];
 
-  function simulateSeriesGame(series) {
+  function simulateSeriesGame(series, divisionId) {
     if (seriesIsDecided(series)) return null;
     var gameNum = series.games.length + 1;
     var homeIsASlot = SERIES_HOME_IS_A[gameNum - 1];
     var homeId = homeIsASlot ? series.teamAId : series.teamBId;
     var awayId = homeIsASlot ? series.teamBId : series.teamAId;
     var result = Sim.simulateGame(homeId, awayId);
+    Sim.applyPlayoffGame(result);
     var homeIsA = homeId === series.teamAId;
     var aScore = homeIsA ? result.homeScore : result.awayScore;
     var bScore = homeIsA ? result.awayScore : result.homeScore;
@@ -172,16 +178,76 @@
       homeScore: result.homeScore,
       awayScore: result.awayScore,
       wentToOT: result.wentToOT,
+      boxscore: result.boxscore,
+      played: true,
     });
     if (seriesIsDecided(series)) {
       series.winnerId = winner === "A" ? series.teamAId : series.teamBId;
+      onSeriesWon(series, divisionId);
     }
     S.save();
     return series;
   }
 
-  function simulateSeries(series) {
-    while (!seriesIsDecided(series)) simulateSeriesGame(series);
+  function simulateSeries(series, divisionId) {
+    while (!seriesIsDecided(series)) simulateSeriesGame(series, divisionId);
+  }
+
+  // ---------------- Series-win payoffs (MVP + growth pick) ---------------
+  // Called the instant a series is decided: crowns that series' MVP (see
+  // js/mvp.js) and grants the winning team's manager a growth payoff — the
+  // human GM gets a one-time choice (queued to season.pendingGrowthPicks,
+  // surfaced right here in the Playoffs tab), an AI-run team applies it
+  // immediately to its own best-upside player.
+  function onSeriesWon(series, divisionId) {
+    if (window.PHLMvp && divisionId) window.PHLMvp.seriesMvp(series, divisionId);
+
+    var winnerId = series.winnerId;
+    var franchiseTeamId = (S.getFranchise() || {}).teamId;
+    var winnerTeam = S.getTeam(winnerId);
+    if (winnerId === franchiseTeamId) {
+      var season = S.getSeason();
+      var pending = (season.pendingGrowthPicks || []).slice();
+      pending.push({ id: U.uid("growthpick"), teamId: winnerId, seriesId: series.id });
+      S.updateSeason({ pendingGrowthPicks: pending });
+      if (window.PHLInbox) {
+        window.PHLInbox.addNotification({
+          type: "growth",
+          title: "Series win — pick a player to boost",
+          body: "Your playoff series win means you can bump one roster player's Overall by 1. Head to the Playoffs tab to choose.",
+        });
+      }
+    } else {
+      var roster = S.getRoster(winnerId).filter(function (p) { return p.potential > p.overall; })
+        .sort(function (a, b) { return (b.potential - b.overall) - (a.potential - a.overall); });
+      var best = roster[0];
+      if (best) {
+        S.updatePlayer(best.id, { overall: U.clamp(best.overall + 1, best.overall, best.potential) });
+        if (window.PHLInbox) {
+          window.PHLInbox.addNotification({
+            type: "playoff",
+            title: (winnerTeam ? winnerTeam.name : "A team") + " wins a series",
+            body: best.name + "'s Overall ticked up to " + best.overall + " after the series win.",
+          });
+        }
+      }
+    }
+  }
+
+  // Applies a pending growth pick for the human GM's team, bumping the
+  // chosen player's Overall by 1 (capped at their Potential).
+  function applyGrowthPick(pickId, playerId) {
+    var season = S.getSeason();
+    var pending = (season.pendingGrowthPicks || []).slice();
+    var idx = pending.findIndex(function (g) { return g.id === pickId; });
+    if (idx === -1) return false;
+    var p = S.getPlayer(playerId);
+    if (p) {
+      S.updatePlayer(p.id, { overall: U.clamp(p.overall + 1, p.overall, p.potential) });
+    }
+    pending.splice(idx, 1);
+    S.updateSeason({ pendingGrowthPicks: pending });
+    return true;
   }
 
   // True once every division currently in the playoffs.playoffs map has
@@ -248,7 +314,7 @@
     var guard = 0;
     while (!bracket.champion && guard < 10) {
       var lastRound = bracket.rounds[bracket.rounds.length - 1];
-      lastRound.series.forEach(simulateSeries);
+      lastRound.series.forEach(function (s) { simulateSeries(s, divisionId); });
       advanceBracket(divisionId);
       guard++;
     }
@@ -265,7 +331,7 @@
     var bracket = S.getSeason().playoffs[divisionId];
     if (!bracket || bracket.champion) return false;
     var lastRound = bracket.rounds[bracket.rounds.length - 1];
-    lastRound.series.forEach(simulateSeries);
+    lastRound.series.forEach(function (s) { simulateSeries(s, divisionId); });
     advanceBracket(divisionId);
     return true;
   }
@@ -278,6 +344,24 @@
     if (!view.division) view.division = divisions.length ? divisions[0].id : null;
 
     var html = '<div class="panel-header"><h2>Playoffs</h2></div>';
+
+    var franchiseTeamId = (S.getFranchise() || {}).teamId;
+    var myPending = (S.getSeason().pendingGrowthPicks || []).filter(function (g) { return g.teamId === franchiseTeamId; });
+    if (myPending.length) {
+      var myRoster = S.getRoster(franchiseTeamId).slice().sort(function (a, b) { return b.overall - a.overall; });
+      myPending.forEach(function (pick) {
+        html += '<div class="form-card growth-pick-card"><h3>&#127942; Playoff Series Win — Choose a Player to Boost</h3>';
+        html += '<p class="muted small">Pick one roster player to bump +1 Overall (capped at their Potential).</p>';
+        html += '<div class="scrim-lineup">';
+        myRoster.forEach(function (p) {
+          var maxed = p.overall >= p.potential;
+          html += '<button class="btn btn-sm' + (maxed ? "" : " btn-primary") + '" data-action="apply-growth-pick" data-pick="' + pick.id + '" data-player="' + p.id + '"' + (maxed ? " disabled" : "") + '>' +
+            U.escapeHtml(p.name) + " (" + p.overall + (maxed ? "/" + p.potential + " maxed" : " &rarr; " + (p.overall + 1)) + ")</button>";
+        });
+        html += "</div></div>";
+      });
+    }
+
     html += '<div class="tab-strip">';
     divisions.forEach(function (d) {
       var cfg = getPlayoffConfig(d.id);
@@ -330,9 +414,14 @@
           html += '<div class="series-games muted small">';
           series.games.forEach(function (g) {
             var h = S.getTeam(g.homeTeamId);
-            html += "G" + g.gameNum + ": " + g.awayScore + "-" + g.homeScore + "@" + (h ? h.abbr : "?") + (g.wentToOT ? " OT" : "") + "  ";
+            var gameKey = series.id + ":" + g.gameNum;
+            var expanded = view.expandedSeriesGame === gameKey;
+            html += '<span class="series-game-toggle" data-action="toggle-series-box" data-key="' + gameKey + '" role="button" tabindex="0">G' + g.gameNum + ": " +
+              g.awayScore + "-" + g.homeScore + "@" + (h ? h.abbr : "?") + (g.wentToOT ? " OT" : "") + "</span>  ";
           });
           html += "</div>";
+          var expandedGame = series.games.find(function (g) { return view.expandedSeriesGame === series.id + ":" + g.gameNum; });
+          if (expandedGame && window.PHLSchedule) html += window.PHLSchedule.renderBoxscore(expandedGame);
         }
         if (series.winnerId) {
           html += '<div class="pill">Winner: ' + U.escapeHtml((S.getTeam(series.winnerId) || {}).name || "?") + "</div>";
@@ -376,7 +465,7 @@
       b.addEventListener("click", function () {
         var series = findSeriesInCurrentRound(b.dataset.division, b.dataset.series);
         if (!series) return;
-        simulateSeriesGame(series);
+        simulateSeriesGame(series, b.dataset.division);
         if (seriesIsDecided(series)) advanceBracket(b.dataset.division);
         render();
         if (window.PHLApp) window.PHLApp.refresh();
@@ -386,8 +475,21 @@
       b.addEventListener("click", function () {
         var series = findSeriesInCurrentRound(b.dataset.division, b.dataset.series);
         if (!series) return;
-        simulateSeries(series);
+        simulateSeries(series, b.dataset.division);
         advanceBracket(b.dataset.division);
+        render();
+        if (window.PHLApp) window.PHLApp.refresh();
+      });
+    });
+    container.querySelectorAll('[data-action="toggle-series-box"]').forEach(function (b) {
+      b.addEventListener("click", function () {
+        view.expandedSeriesGame = view.expandedSeriesGame === b.dataset.key ? null : b.dataset.key;
+        render();
+      });
+    });
+    container.querySelectorAll('[data-action="apply-growth-pick"]').forEach(function (b) {
+      b.addEventListener("click", function () {
+        applyGrowthPick(b.dataset.pick, b.dataset.player);
         render();
         if (window.PHLApp) window.PHLApp.refresh();
       });
@@ -402,5 +504,6 @@
     allDivisionsHaveChampions: allDivisionsHaveChampions,
     totalRoundsForDivision: totalRoundsForDivision,
     getPlayoffConfig: getPlayoffConfig,
+    applyGrowthPick: applyGrowthPick,
   };
 })();

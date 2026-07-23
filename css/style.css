@@ -813,3 +813,100 @@ input:focus, select:focus {
 .draft-rounds-note strong { color: var(--text-primary); }
 
 .wizard-footer { text-align: center; margin-top: 1.25rem; }
+
+/* ---------- Nav badge (Inbox unread count) ---------- */
+.nav-item { position: relative; }
+.nav-badge {
+  margin-left: auto;
+  background: linear-gradient(135deg, var(--critical), #ff8a63);
+  color: white;
+  font-size: 0.66rem;
+  font-weight: 700;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 10px -2px rgba(255, 92, 108, 0.6);
+}
+
+/* ---------- Inbox ---------- */
+.inbox-list { display: grid; gap: 0.5rem; }
+.inbox-item {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  background: linear-gradient(180deg, var(--surface-1), var(--surface-2));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.inbox-item:hover { border-color: var(--glow-1); }
+.inbox-item-unread { border-left: 3px solid var(--glow-1); box-shadow: var(--glow-ring-soft); }
+.inbox-item-icon {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--surface-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+}
+.inbox-item-body { flex: 1; min-width: 0; }
+.inbox-item-title { font-weight: 600; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.inbox-item-text { margin-top: 0.15rem; }
+
+/* ---------- Scrims / chemistry ---------- */
+.chemistry-card { }
+.chemistry-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
+.chemistry-header h3 { margin: 0; }
+.chemistry-bar {
+  height: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.chemistry-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--glow-2), var(--glow-cyan));
+  border-radius: 7px;
+  box-shadow: 0 0 12px -2px var(--glow-2-soft);
+  transition: width 0.3s ease;
+}
+.scrim-lineup { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+
+/* ---------- MVP / awards ---------- */
+.pill-mvp { border-color: var(--series-yellow); color: var(--series-yellow); font-weight: 600; box-shadow: 0 0 10px -6px rgba(240, 180, 41, 0.5); }
+.mvp-card h4 { margin: 0.4rem 0 0.1rem; }
+.growth-pick-card { border-color: var(--series-yellow); box-shadow: 0 0 26px -12px rgba(240, 180, 41, 0.5); }
+
+/* ---------- Series box score toggle (Playoffs tab) ---------- */
+.series-game-toggle { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
+.series-game-toggle:hover { color: var(--text-primary); }
+
+/* ---------- Roster minimum warning (Team Management tab) ---------- */
+.roster-min-warning { border-color: var(--critical); }
+
+/* ---------- Expansion Franchise logo upload preview ---------- */
+.logo-upload-preview { margin-top: 0.5rem; }
+.logo-upload-preview img { max-width: 80px; max-height: 80px; border-radius: 10px; box-shadow: var(--shadow-lift); }
+input[type="color"] { padding: 0.25rem; height: 2.4rem; cursor: pointer; }
+
+/* ---------- Button press / hover polish, panel fade-in ---------- */
+.btn:active { transform: translateY(1px) scale(0.97); }
+.btn-primary:hover { transform: translateY(-1px); }
+@keyframes tab-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.tab-panel-active { animation: tab-fade-in 0.22s ease; }
+.team-card, .leaderboard-card, .stat-tile, .series-card, .inbox-item {
+  transition: box-shadow 0.15s ease, transform 0.12s ease, border-color 0.15s ease;
+}
+.stat-tile:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift), 0 0 20px -12px var(--glow-1-soft); }

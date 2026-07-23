@@ -68,6 +68,9 @@
       if (signed.length) summary.push(signed.length + " free-agent signing(s) around the league.");
       var promoted = AI.aiRunPromotions();
       if (promoted.length) summary.push(promoted.length + " promotion(s) around the league.");
+      var traded = AI.aiRunTrades();
+      if (traded.length) summary.push(traded.length + " in-division AI trade(s) around the league.");
+      AI.aiProposeTradesToUser();
     }
 
     var weeksTotal = settings().offseasonWeeks || 5;
@@ -90,8 +93,26 @@
     var count = window.PHLSchedule.simulateCalendarWeek(season.calendarWeek);
     summary.push(count + " game(s) played across the league this week.");
 
+    var AI = window.PHLAIManager;
+    if (AI) {
+      var traded = AI.aiRunTrades();
+      if (traded.length) summary.push(traded.length + " in-division AI trade(s) around the league.");
+      AI.aiProposeTradesToUser();
+    }
+
+    // First-half MVPs are revealed right at week 7 of the 12-week regular
+    // season (see js/mvp.js) — one per division.
+    if (season.calendarWeek === 7 && window.PHLMvp) {
+      window.PHLMvp.computeFirstHalfMvps();
+      summary.push("First-Half MVPs have been announced around the league.");
+    }
+
     var weeksTotal = settings().regularSeasonWeeks || 12;
     if (season.calendarWeek >= weeksTotal) {
+      if (window.PHLMvp) {
+        window.PHLMvp.computeSecondHalfMvps();
+        summary.push("Second-Half MVPs have been announced around the league.");
+      }
       var Playoffs = window.PHLPlayoffs;
       S.getDivisions().forEach(function (d) {
         Playoffs.startPlayoffs(d.id);
@@ -107,7 +128,17 @@
     var Playoffs = window.PHLPlayoffs;
     var anyActive = false;
     S.getDivisions().forEach(function (d) {
+      var wasChampioned = !!((S.getSeason().playoffs || {})[d.id] || {}).champion;
       if (Playoffs.simulateOneRound(d.id)) anyActive = true;
+      var bracket = (S.getSeason().playoffs || {})[d.id];
+      if (bracket && bracket.champion && !wasChampioned && window.PHLInbox) {
+        var champ = S.getTeam(bracket.champion);
+        window.PHLInbox.addNotification({
+          type: "playoff",
+          title: (S.getDivision(d.id) || {}).name + " Division Champion",
+          body: (champ ? champ.name : "A team") + " has won the " + (S.getDivision(d.id) || {}).name + " Division championship!",
+        });
+      }
     });
     if (anyActive) summary.push("A playoff round resolved across the league.");
 
@@ -130,6 +161,12 @@
   function advanceWeek() {
     var blockedReason = checkBlocked();
     if (blockedReason) return { advanced: false, reason: blockedReason };
+
+    var Scrims = window.PHLScrims;
+    if (Scrims) {
+      Scrims.weeklyChemistryUpkeep();
+      Scrims.resetWeeklyUsage();
+    }
 
     var season = S.getSeason();
     var summary = [];

@@ -10,6 +10,7 @@
   var modules = {
     dashboard: window.PHLDashboard,
     startup: window.PHLStartupDraft,
+    teammanagement: window.PHLTeamManagement,
     teams: window.PHLTeams,
     teamdetail: window.PHLTeamDetail,
     players: window.PHLPlayers,
@@ -19,6 +20,8 @@
     trades: window.PHLTrades,
     promotions: window.PHLPromotions,
     contracts: window.PHLContracts,
+    scrims: window.PHLScrims,
+    inbox: window.PHLInbox,
     stats: window.PHLStats,
     data: window.PHLDataTools,
   };
@@ -26,6 +29,7 @@
   var TAB_LABELS = {
     dashboard: "Dashboard",
     startup: "Startup Draft",
+    teammanagement: "Team Management",
     teams: "Teams",
     teamdetail: "Team",
     players: "Players",
@@ -35,6 +39,8 @@
     trades: "Trades",
     promotions: "Promotions",
     contracts: "Contracts & Cap",
+    scrims: "Scrims",
+    inbox: "Inbox",
     stats: "Stats & Offseason",
     data: "Data Tools",
   };
@@ -95,6 +101,41 @@
     }
     updateSidebarFranchise();
     updateAdvanceButton();
+    updateNavVisibility();
+    updateInboxBadge();
+  }
+
+  // "Startup Draft" is a one-time, save-opening flow — once it's complete
+  // its nav item disappears and "Team Management" (the day-to-day roster
+  // hub) takes its place. If the user happens to be sitting on the
+  // Startup Draft tab the moment it finishes, bounce them over.
+  function updateNavVisibility() {
+    var sd = S.getStartupDraft();
+    var draftDone = !!(sd && sd.status === "complete");
+    var startupNav = document.querySelector('.nav-item[data-tab="startup"]');
+    var teamMgmtNav = document.querySelector('.nav-item[data-tab="teammanagement"]');
+    if (startupNav) startupNav.style.display = draftDone ? "none" : "";
+    if (teamMgmtNav) teamMgmtNav.style.display = draftDone ? "" : "none";
+    if (draftDone && currentTab === "startup") {
+      showTab("teammanagement");
+    }
+  }
+
+  function updateInboxBadge() {
+    var btn = document.querySelector('.nav-item[data-tab="inbox"]');
+    if (!btn || !S.unreadNotificationCount) return;
+    var count = S.unreadNotificationCount();
+    var badge = btn.querySelector(".nav-badge");
+    if (count > 0) {
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "nav-badge";
+        btn.appendChild(badge);
+      }
+      badge.textContent = count > 99 ? "99+" : String(count);
+    } else if (badge) {
+      badge.remove();
+    }
   }
 
   // Franchise block pinned near the top of the sidebar — mirrors the

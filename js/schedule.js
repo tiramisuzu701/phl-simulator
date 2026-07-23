@@ -246,7 +246,7 @@
     html += "</div>";
 
     var weeks = divisionWeeks(div);
-    var weekNums = Object.keys(weeks).map(Number).sort(function (a, b) { return b - a; }); // newest first
+    var weekNums = Object.keys(weeks).map(Number).sort(function (a, b) { return a - b; }); // Week 1 first, latest week at the bottom
     html += '<div class="schedule-list">';
     weekNums.forEach(function (wn) {
       html += '<div class="week-block"><h4>Week ' + wn + "</h4>";
@@ -309,5 +309,6 @@
     simulateAllDivisionsRestOfSeason: simulateAllDivisionsRestOfSeason,
     isRegularSeasonComplete: isRegularSeasonComplete,
     nextUnplayedWeek: nextUnplayedWeek,
+    renderBoxscore: renderBoxscore,
   };
 })();

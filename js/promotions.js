@@ -154,6 +154,11 @@
       alert(player.name + " isn't eligible to be called up to " + toTeam.name + " (not in a lower division).");
       return false;
     }
+    if (!S.wouldMeetRosterMinimum(fromTeamId, [playerId])) {
+      alert("Calling up " + player.name + " would drop " + (fromTeam ? fromTeam.name : "their current team") +
+        " below the required " + S.ROSTER_MIN.total + "-player roster minimum — the move can't go through.");
+      return false;
+    }
     var fee = callUpFee(player);
     var newSalary = fee;
     var totalCost = fee + newSalary;

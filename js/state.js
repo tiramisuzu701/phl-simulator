@@ -48,6 +48,8 @@
     if (!d.startupDraft) d.startupDraft = deepClone(starter.startupDraft);
     if (!d.promotions) d.promotions = [];
     if (!d.trades) d.trades = [];
+    if (!d.notifications) d.notifications = [];
+    if (!d.mvpAwards) d.mvpAwards = [];
     for (var key in starter.settings) {
       if (!(key in d.settings)) d.settings[key] = starter.settings[key];
     }
@@ -59,6 +61,7 @@
     if (d.season.calendarWeek == null) d.season.calendarWeek = 1;
     if (d.season.entryDraftDoneThisCycle == null) d.season.entryDraftDoneThisCycle = false;
     if (!d.season.playoffs) d.season.playoffs = {};
+    if (!d.season.pendingGrowthPicks) d.season.pendingGrowthPicks = [];
     d.divisions.forEach(function (div) {
       if (div.gamesPerWeek == null) {
         var starterDiv = starter.divisions.find(function (sd) { return sd.id === div.id; });
@@ -76,12 +79,17 @@
         var starterTeam = starter.teams.find(function (st) { return st.id === t.id; });
         if (starterTeam && starterTeam.logoUrl) t.logoUrl = starterTeam.logoUrl;
       }
+      if (t.customColor === undefined) t.customColor = null;
+      if (t.chemistry == null) t.chemistry = 50;
+      if (t.scrimsThisWeek == null) t.scrimsThisWeek = 0;
     });
     d.players.forEach(function (p) {
       if (!p.attributes) p.attributes = U.deriveAttributes(p.overall, p.position, p.archetype);
       if (p.age == null) p.age = U.generateStartingAge();
       if (p.retirementAge == null) p.retirementAge = U.retirementAgeFor(p.age);
       if (!p.stats) p.stats = freshStatLine();
+      if (!p.playoffStats) p.playoffStats = freshStatLine();
+      if (p.statsAtHalf === undefined) p.statsAtHalf = null;
       if (p.starter == null) p.starter = false;
     });
   }
@@ -339,6 +347,91 @@
     return entry;
   }
 
+  // ---------------- Roster minimum (2F / 2D / 1G, 5 players min) --------
+  // Enforced for EVERY team (AI included) — see js/contracts.js (release),
+  // js/trades.js (both sides of any trade), js/promotions.js (donor side
+  // of a call-up), and js/aiManager.js (AI cap-compliance releases).
+  var ROSTER_MIN = { F: 2, D: 2, G: 1, total: 5 };
+  function rosterMeetsMinimum(players) {
+    var counts = { F: 0, D: 0, G: 0 };
+    players.forEach(function (p) { if (counts[p.position] != null) counts[p.position] += 1; });
+    return players.length >= ROSTER_MIN.total && counts.F >= ROSTER_MIN.F && counts.D >= ROSTER_MIN.D && counts.G >= ROSTER_MIN.G;
+  }
+  // Would `teamId`'s roster still meet the hard minimum if `removeIds` left
+  // and `addPlayers` (full player objects, e.g. an incoming trade piece)
+  // joined? Pass no removeIds/addPlayers to just check the current roster.
+  function wouldMeetRosterMinimum(teamId, removeIds, addPlayers) {
+    removeIds = removeIds || [];
+    addPlayers = addPlayers || [];
+    var roster = getRoster(teamId)
+      .filter(function (p) { return removeIds.indexOf(p.id) === -1; })
+      .concat(addPlayers);
+    return rosterMeetsMinimum(roster);
+  }
+
+  // ---------------- Notifications (Inbox) --------------------------------
+  function getNotifications() {
+    return data.notifications;
+  }
+  function addNotification(entry) {
+    entry.id = entry.id || U.uid("notif");
+    entry.read = !!entry.read;
+    if (entry.createdSeason == null) entry.createdSeason = (data.season && data.season.seasonNumber) || 1;
+    data.notifications.unshift(entry);
+    // Keep the log from growing unbounded across a long save.
+    if (data.notifications.length > 300) data.notifications.length = 300;
+    save();
+    return entry;
+  }
+  function markNotificationRead(id) {
+    var n = data.notifications.find(function (x) { return x.id === id; });
+    if (n) { n.read = true; save(); }
+    return n;
+  }
+  function markAllNotificationsRead() {
+    data.notifications.forEach(function (n) { n.read = true; });
+    save();
+  }
+  function unreadNotificationCount() {
+    return data.notifications.filter(function (n) { return !n.read; }).length;
+  }
+  function removeNotification(id) {
+    data.notifications = data.notifications.filter(function (n) { return n.id !== id; });
+    save();
+  }
+
+  // ---------------- MVP Awards -------------------------------------------
+  function getMvpAwards() {
+    return data.mvpAwards;
+  }
+  function addMvpAward(entry) {
+    entry.id = entry.id || U.uid("mvp");
+    data.mvpAwards.push(entry);
+    save();
+    return entry;
+  }
+
+  // ---------------- Playoff stat tracking ---------------------------------
+  // Wiped for a division's currently-rostered players each time that
+  // division's bracket starts (see js/playoffs.js startPlayoffs) so playoff
+  // stats/leaderboards reflect only the playoffs currently underway.
+  function resetPlayoffStatsForDivision(divisionId) {
+    var teamIds = getTeams(divisionId).map(function (t) { return t.id; });
+    data.players.forEach(function (p) {
+      if (p.teamId && teamIds.indexOf(p.teamId) !== -1) p.playoffStats = freshStatLine();
+    });
+    save();
+  }
+
+  // ---------------- Team chemistry (Scrims) --------------------------------
+  function addChemistry(teamId, amount) {
+    var t = getTeam(teamId);
+    if (!t) return null;
+    t.chemistry = U.clamp((t.chemistry == null ? 50 : t.chemistry) + amount, 0, 100);
+    save();
+    return t.chemistry;
+  }
+
   // Is this the team the human GM currently manages? Every action that
   // touches a roster/contract (sign, release, re-sign, lineup, promote)
   // should gate on this — other teams are AI-managed and read-only to the
@@ -412,5 +505,18 @@
     getTrades: getTrades,
     addTrade: addTrade,
     isManagedTeam: isManagedTeam,
+    ROSTER_MIN: ROSTER_MIN,
+    rosterMeetsMinimum: rosterMeetsMinimum,
+    wouldMeetRosterMinimum: wouldMeetRosterMinimum,
+    getNotifications: getNotifications,
+    addNotification: addNotification,
+    markNotificationRead: markNotificationRead,
+    markAllNotificationsRead: markAllNotificationsRead,
+    unreadNotificationCount: unreadNotificationCount,
+    removeNotification: removeNotification,
+    getMvpAwards: getMvpAwards,
+    addMvpAward: addMvpAward,
+    resetPlayoffStatsForDivision: resetPlayoffStatsForDivision,
+    addChemistry: addChemistry,
   };
 })();

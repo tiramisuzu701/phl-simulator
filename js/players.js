@@ -129,7 +129,13 @@
     wrap.querySelectorAll('[data-action="delete-player"]').forEach(function (b) {
       b.addEventListener("click", function () {
         var p = S.getPlayer(b.dataset.id);
-        if (p && confirm('Delete "' + p.name + '"?')) {
+        if (!p) return;
+        if (p.teamId && !S.wouldMeetRosterMinimum(p.teamId, [p.id])) {
+          alert("Can't delete " + p.name + " — that would drop " + (S.getTeam(p.teamId) || {}).name +
+            " below the required 2F/2D/1G, " + S.ROSTER_MIN.total + "-player roster minimum. Trade or promote instead, or delete a different player.");
+          return;
+        }
+        if (confirm('Delete "' + p.name + '"?')) {
           S.deletePlayer(p.id);
           renderTable();
           if (window.PHLApp) window.PHLApp.refresh();

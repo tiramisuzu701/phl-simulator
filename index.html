@@ -21,6 +21,8 @@
       <nav class="sidebar-nav" id="tab-nav">
         <button class="nav-item" data-tab="dashboard"><span class="nav-icon">&#9673;</span><span>Dashboard</span></button>
         <button class="nav-item" data-tab="startup"><span class="nav-icon">&#9873;</span><span>Startup Draft</span></button>
+        <button class="nav-item" data-tab="teammanagement" style="display:none"><span class="nav-icon">&#9974;</span><span>Team Management</span></button>
+        <button class="nav-item" data-tab="inbox"><span class="nav-icon">&#128233;</span><span>Inbox</span></button>
         <button class="nav-item" data-tab="teams"><span class="nav-icon">&#9974;</span><span>Teams</span></button>
         <button class="nav-item" data-tab="players"><span class="nav-icon">&#9787;</span><span>Players</span></button>
         <button class="nav-item" data-tab="schedule"><span class="nav-icon">&#128197;</span><span>Schedule</span></button>
@@ -29,6 +31,7 @@
         <button class="nav-item" data-tab="trades"><span class="nav-icon">&#8646;</span><span>Trades</span></button>
         <button class="nav-item" data-tab="promotions"><span class="nav-icon">&#8593;</span><span>Promotions</span></button>
         <button class="nav-item" data-tab="contracts"><span class="nav-icon">&#128181;</span><span>Contracts &amp; Cap</span></button>
+        <button class="nav-item" data-tab="scrims"><span class="nav-icon">&#9889;</span><span>Scrims</span></button>
         <button class="nav-item" data-tab="stats"><span class="nav-icon">&#128200;</span><span>Stats &amp; Offseason</span></button>
         <button class="nav-item" data-tab="data"><span class="nav-icon">&#128451;</span><span>Data Tools</span></button>
       </nav>
@@ -53,6 +56,8 @@
       <main class="app-main">
         <section class="tab-panel" id="tab-dashboard"></section>
         <section class="tab-panel" id="tab-startup"></section>
+        <section class="tab-panel" id="tab-teammanagement"></section>
+        <section class="tab-panel" id="tab-inbox"></section>
         <section class="tab-panel" id="tab-teams"></section>
         <section class="tab-panel" id="tab-teamdetail"></section>
         <section class="tab-panel" id="tab-players"></section>
@@ -62,6 +67,7 @@
         <section class="tab-panel" id="tab-trades"></section>
         <section class="tab-panel" id="tab-promotions"></section>
         <section class="tab-panel" id="tab-contracts"></section>
+        <section class="tab-panel" id="tab-scrims"></section>
         <section class="tab-panel" id="tab-stats"></section>
         <section class="tab-panel" id="tab-data"></section>
       </main>
@@ -81,6 +87,10 @@
   <script src="js/state.js"></script>
   <script src="js/sim.js"></script>
   <script src="js/startupDraft.js"></script>
+  <script src="js/teamManagement.js"></script>
+  <script src="js/inbox.js"></script>
+  <script src="js/mvp.js"></script>
+  <script src="js/scrims.js"></script>
   <script src="js/teams.js"></script>
   <script src="js/players.js"></script>
   <script src="js/schedule.js"></script>

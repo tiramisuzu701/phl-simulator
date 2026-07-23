@@ -33,10 +33,11 @@ where you make one decision up front, before anything else happens:
 - **Manage an Existing Team** — pick a division, then a team already in the
   league. The Startup Draft runs **8 rounds per phase**.
 - **Create an Expansion Franchise** — pick a division and give your brand-new
-  team a name and abbreviation; it joins the league alongside the existing
-  teams and becomes the team you manage. The Startup Draft runs **6 rounds
-  per phase** instead of 8, since one extra team is now drawing from the
-  same fixed-size real player pool.
+  team a name and abbreviation, plus (optionally) a **team color** and an
+  uploaded **logo** — both show up everywhere your team's crest appears; it
+  joins the league alongside the existing teams and becomes the team you
+  manage. The Startup Draft runs **6 rounds per phase** instead of 8, since
+  one extra team is now drawing from the same fixed-size real player pool.
 
 Submitting the wizard writes that choice into your save and sends you to
 `index.html` to actually play — the round count you picked applies for the
@@ -72,13 +73,13 @@ team chosen yet (a brand-new save, or one wiped via **Data Tools → Reset**).
   very first retirement in a fresh save won't happen before roughly **Season
   7**. All of this happens automatically — there's nothing to configure.
 - **Player growth** — a young player below their Potential develops toward
-  it every season, automatically (not tied to on-ice performance). Growth is
-  fastest through the early-to-mid 20s, tapers off approaching the decline
-  age, and closes bigger Overall-to-Potential gaps faster than small ones —
-  so a high-Potential prospect reliably climbs most of the way to their
-  ceiling over a handful of seasons instead of drifting up a point at a
-  time. Once decline sets in, growth stops and Overall trends back down
-  instead.
+  it every season, automatically (not tied to on-ice performance), though at
+  a deliberately gradual pace. On top of that, winning a **playoff series**
+  grants a one-time choice: bump one roster player's Overall by 1 (capped at
+  their Potential) — pick who from a card right in the **Playoffs** tab. AI
+  teams get the same bonus automatically, applied to their best-upside
+  player. Once decline sets in, automatic growth stops and Overall trends
+  back down instead.
 - **Breakout rookies** — each new season, a fresh batch of lower-overall,
   wide-potential rookies enters free agency directly (no draft — see
   below). They can only be signed by Prospect teams (occasionally
@@ -141,6 +142,9 @@ team chosen yet (a brand-new save, or one wiped via **Data Tools → Reset**).
   real player pool has a fixed number of players, it can run out before
   every team completes every round, especially deep into the Prospect
   phase — teams just end up with whatever roster size the pool allowed.
+  Once the draft finishes, its nav item disappears and a **Team
+  Management** tab takes its place — your day-to-day roster hub (lineup,
+  roster-minimum status, quick links to Contracts/Trades/Promotions/Scrims).
 - **Promotions (off-season call-ups)** — during the off-season, a manager
   can permanently call up a rostered player from any strictly lower-tier
   division onto their own team from the **Promotions** tab. There's no
@@ -160,9 +164,32 @@ team chosen yet (a brand-new save, or one wiped via **Data Tools → Reset**).
   contractual control) so it's clear going in whether an offer is
   reasonable. The other team's side is evaluated automatically — it won't
   accept giving up meaningfully more value than it receives — and a trade
-  that would leave either side over the roster limit or the salary cap
-  can't be proposed at all. Every completed trade is logged in a Trade
-  History table.
+  that would leave either side over the roster limit, the salary cap, or
+  the **roster minimum** (below) can't be proposed at all. Every completed
+  trade is logged in a Trade History table. AI teams also trade with each
+  other automatically, **within their own division only**, and can send
+  *you* an in-division trade offer too — those show up as an actionable
+  card in the **Inbox** tab (accept or reject).
+- **Roster minimum** — every team, yours included, must carry at least 5
+  players with a legal 2 Forward / 2 Defense / 1 Goalie lineup. Releases,
+  trades, and Promotions call-ups that would drop a team below that are
+  blocked automatically (an AI team that's simultaneously over the cap and
+  at the roster floor stays over cap rather than going roster-illegal).
+- **Scrims** — run practice scrims with your current starters from the
+  **Scrims** tab to build team **chemistry** (0-100), which gives a small,
+  real boost to your team's offense and defense in every sim. Capped at a
+  couple of scrims per week, and chemistry decays a little if you skip it.
+- **Inbox** — a running log of what's happening around the league: AI
+  trades, promotions, MVP awards, playoff results, series-win growth
+  prompts, and actionable AI trade offers sent to you.
+- **MVP awards** — one First-Half MVP per division at regular-season week 7,
+  one Second-Half MVP per division right as the playoffs begin (based on
+  weeks 8-12 only), and a Playoff Series MVP for every completed series.
+  See the **Stats & Offseason** tab for the current season's award winners.
+- **Playoff stats & box scores** — playoff games track their own separate
+  stat lines (not mixed into regular-season totals), with a full per-game
+  box score (click any game inside a series on the **Playoffs** tab) and
+  dedicated **Playoff Leaders** boards on the **Stats & Offseason** tab.
 - **Contracts & Cap** — salary cap is set **per division** (Prospect
   $1,000,000/yr, Contender $2,000,000/yr, Pro $4,000,000/yr team budgets),
   reflecting that top-tier orgs have bigger budgets. Every player has an

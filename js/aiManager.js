@@ -102,6 +102,131 @@
     return done;
   }
 
+  // ---------------- AI-AI trades (in-division only) ----------------
+  // Fuller depth target the same as the Startup Draft aims for — a team
+  // "thin" at a position relative to this is a trade candidate to fix it.
+  var DEPTH_TARGET = { F: 3, D: 3, G: 2 };
+
+  function positionCounts(teamId) {
+    var counts = { F: 0, D: 0, G: 0 };
+    S.getRoster(teamId).forEach(function (p) { if (counts[p.position] != null) counts[p.position] += 1; });
+    return counts;
+  }
+
+  // Position this team is thinnest at relative to DEPTH_TARGET, or null if
+  // every position is already at/above target.
+  function weakestNeed(teamId) {
+    var counts = positionCounts(teamId);
+    var worst = null;
+    var worstDeficit = 0;
+    ["G", "D", "F"].forEach(function (pos) {
+      var deficit = DEPTH_TARGET[pos] - counts[pos];
+      if (deficit > worstDeficit) { worstDeficit = deficit; worst = pos; }
+    });
+    return worst;
+  }
+
+  // Each in-division pair of AI teams occasionally swaps a player 1-for-1
+  // when it fixes a real need on both sides at a fair-ish value — mirrors
+  // the acceptance threshold js/trades.js uses for user-proposed trades.
+  // Never touches the human GM's roster (see aiProposeTradesToUser for
+  // that path, which is actionable via the Inbox instead of automatic).
+  function aiRunTrades() {
+    var Trades = window.PHLTrades;
+    if (!Trades) return [];
+    var franchiseTeamId = (S.getFranchise() || {}).teamId;
+    var completed = [];
+    S.getDivisions().forEach(function (div) {
+      var aiInDiv = S.getTeams(div.id).filter(function (t) { return t.id !== franchiseTeamId; });
+      if (aiInDiv.length < 2) return;
+      for (var attempt = 0; attempt < 2; attempt++) {
+        var a = U.pick(aiInDiv);
+        var partners = aiInDiv.filter(function (t) { return t.id !== a.id; });
+        if (!partners.length) continue;
+        var b = U.pick(partners);
+        var rosterA = S.getRoster(a.id);
+        var rosterB = S.getRoster(b.id);
+        if (rosterA.length < 6 || rosterB.length < 6) continue; // keep enough depth to trade safely
+        var needA = weakestNeed(a.id);
+        var needB = weakestNeed(b.id);
+        if (!needA || !needB || needA === needB) continue;
+        var giveCandidate = rosterA.filter(function (p) { return p.position === needB; }).sort(function (x, y) { return x.overall - y.overall; })[0];
+        var getCandidate = rosterB.filter(function (p) { return p.position === needA; }).sort(function (x, y) { return y.overall - x.overall; })[0];
+        if (!giveCandidate || !getCandidate) continue;
+        if (!S.wouldMeetRosterMinimum(a.id, [giveCandidate.id], [getCandidate])) continue;
+        if (!S.wouldMeetRosterMinimum(b.id, [getCandidate.id], [giveCandidate])) continue;
+        var capAOk = S.capForTeam(a.id) >= (S.capUsed(a.id) - giveCandidate.salary + getCandidate.salary);
+        var capBOk = S.capForTeam(b.id) >= (S.capUsed(b.id) - getCandidate.salary + giveCandidate.salary);
+        if (!capAOk || !capBOk) continue;
+        var valGive = Trades.tradeValue(giveCandidate);
+        var valGet = Trades.tradeValue(getCandidate);
+        if (valGet < valGive * 0.85 || valGive < valGet * 0.85) continue; // neither side accepts a lopsided swap
+
+        S.updatePlayer(giveCandidate.id, { teamId: b.id });
+        S.updatePlayer(getCandidate.id, { teamId: a.id });
+        S.addTrade({ season: S.getSeason().seasonNumber || 1, teamAId: a.id, teamBId: b.id, playersToB: [giveCandidate.id], playersToA: [getCandidate.id] });
+        completed.push({ teamAId: a.id, teamBId: b.id, playerToB: giveCandidate.id, playerToA: getCandidate.id });
+        if (window.PHLInbox) {
+          window.PHLInbox.addNotification({
+            type: "trade",
+            title: "In-division trade",
+            body: a.name + " traded " + giveCandidate.name + " to " + b.name + " for " + getCandidate.name + ".",
+          });
+        }
+      }
+    });
+    return completed;
+  }
+
+  // ---------------- AI -> user trade offers (in-division only) ----------
+  // Never executes automatically — queues an actionable Inbox entry (see
+  // js/inbox.js) the human GM accepts or rejects.
+  function aiProposeTradesToUser() {
+    var franchise = S.getFranchise();
+    if (!franchise || !franchise.teamId) return [];
+    var myTeam = S.getTeam(franchise.teamId);
+    if (!myTeam) return [];
+    var Trades = window.PHLTrades;
+    var Inbox = window.PHLInbox;
+    if (!Trades || !Inbox) return [];
+    // Don't pile up offers — cap how many unresolved ones can be pending.
+    var pendingOffers = S.getNotifications().filter(function (n) { return n.type === "trade-offer"; });
+    if (pendingOffers.length >= 3) return [];
+    if (Math.random() > 0.35) return []; // not every tick generates an offer
+
+    var partners = S.getTeams(myTeam.division).filter(function (t) { return t.id !== myTeam.id; });
+    if (!partners.length) return [];
+    var partner = U.pick(partners);
+    var myRoster = S.getRoster(myTeam.id);
+    var partnerRoster = S.getRoster(partner.id);
+    if (myRoster.length < 6 || partnerRoster.length < 6) return [];
+
+    var need = weakestNeed(partner.id);
+    if (!need) return [];
+    // The AI wants a player at its need position from the user's roster —
+    // pick one of the user's decent-but-not-best players at that spot so
+    // the offer feels plausible rather than a lowball for a star.
+    var userCandidates = myRoster.filter(function (p) { return p.position === need; }).sort(function (a, b) { return b.overall - a.overall; });
+    if (!userCandidates.length) return [];
+    var wants = userCandidates[Math.min(1, userCandidates.length - 1)];
+    var wantsValue = Trades.tradeValue(wants);
+    // What the AI offers back: closest-value player it can spare at a
+    // position the user doesn't already have plenty of, within ~15%.
+    var offerCandidates = partnerRoster.slice().sort(function (a, b) {
+      return Math.abs(Trades.tradeValue(a) - wantsValue) - Math.abs(Trades.tradeValue(b) - wantsValue);
+    });
+    var gives = offerCandidates.find(function (p) {
+      var giveVal = Trades.tradeValue(p);
+      return giveVal >= wantsValue * 0.85 && giveVal <= wantsValue * 1.05;
+    });
+    if (!gives) return [];
+    if (!S.wouldMeetRosterMinimum(partner.id, [gives.id], [wants])) return [];
+    if (!S.wouldMeetRosterMinimum(myTeam.id, [wants.id], [gives])) return [];
+
+    Inbox.addTradeOffer(partner.id, myTeam.id, gives.id, wants.id);
+    return [{ aiTeamId: partner.id, userTeamId: myTeam.id }];
+  }
+
   // ---------------- Salary cap enforcement ----------------
   // Releases the lowest-Overall players on a team, one at a time, until
   // it's cap-compliant. Used automatically for every AI team; the human
@@ -115,7 +240,14 @@
       guard++;
       var roster = S.getRoster(teamId).slice().sort(function (a, b) { return a.overall - b.overall; });
       if (!roster.length) break;
-      var cut = roster[0];
+      // Roster minimum (2F/2D/1G, 5 players) wins over cap compliance —
+      // release the lowest-overall player that can go WITHOUT breaking the
+      // minimum; if none can, stop (the team stays over cap rather than
+      // becoming roster-illegal). AI-team cap overages don't block Advance
+      // Week anyway (see js/calendar.js checkBlocked), so this is a safe
+      // trade-off.
+      var cut = roster.find(function (p) { return S.wouldMeetRosterMinimum(teamId, [p.id]); });
+      if (!cut) break;
       S.updatePlayer(cut.id, { teamId: null });
       released.push(cut);
     }
@@ -145,6 +277,8 @@
   window.PHLAIManager = {
     aiSignFreeAgents: aiSignFreeAgents,
     aiRunPromotions: aiRunPromotions,
+    aiRunTrades: aiRunTrades,
+    aiProposeTradesToUser: aiProposeTradesToUser,
     enforceCapForAllTeams: enforceCapForAllTeams,
     autoReleaseToCompliance: autoReleaseToCompliance,
   };

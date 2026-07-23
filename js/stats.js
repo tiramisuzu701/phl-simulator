@@ -72,6 +72,36 @@
     html += renderBoard("GAA (lower is better)", leaderboard(goalies, function (p) { return p.stats.gaa; }, 10, { asc: true, min: 3, countFn: function (p) { return p.stats.gp; } }), "GAA", function (p) { return p.stats.gaa; });
     html += "</div>";
 
+    var playoffPlayers = playersInScope().filter(function (p) { return p.playoffStats && p.playoffStats.gp > 0; });
+    var playoffSkaters = playoffPlayers.filter(function (p) { return p.position !== "G"; });
+    var playoffGoalies = playoffPlayers.filter(function (p) { return p.position === "G"; });
+    html += '<div class="panel-header" style="margin-top:2rem"><h2>Playoff Leaders</h2></div>';
+    if (!playoffPlayers.length) {
+      html += '<p class="muted small">No playoff games have been played yet this cycle.</p>';
+    } else {
+      html += '<div class="leaderboard-grid">';
+      html += renderBoard("Playoff Points", leaderboard(playoffSkaters, function (p) { return p.playoffStats.pts; }, 10), "PTS", function (p) { return p.playoffStats.pts; });
+      html += renderBoard("Playoff Goals", leaderboard(playoffSkaters, function (p) { return p.playoffStats.g; }, 10), "G", function (p) { return p.playoffStats.g; });
+      html += renderBoard("Playoff Assists", leaderboard(playoffSkaters, function (p) { return p.playoffStats.a; }, 10), "A", function (p) { return p.playoffStats.a; });
+      html += renderBoard("Playoff Save %", leaderboard(playoffGoalies, function (p) { return p.playoffStats.svPct; }, 10, { min: 2, countFn: function (p) { return p.playoffStats.shotsAgainst; } }), "SV%", function (p) { return (p.playoffStats.svPct * 100).toFixed(1); });
+      html += "</div>";
+    }
+
+    var mvpAwards = S.getMvpAwards().filter(function (a) { return a.season === S.getSeason().seasonNumber; });
+    if (mvpAwards.length) {
+      html += '<div class="panel-header" style="margin-top:2rem"><h2>Awards &mdash; Season ' + S.getSeason().seasonNumber + "</h2></div>";
+      html += '<div class="leaderboard-grid">';
+      mvpAwards.slice().reverse().forEach(function (a) {
+        var p = S.getPlayer(a.playerId);
+        var div = S.getDivision(a.divisionId);
+        var label = a.type === "first-half" ? "First-Half MVP" : a.type === "second-half" ? "Second-Half MVP" : "Playoff Series MVP";
+        html += '<div class="leaderboard-card mvp-card"><span class="pill pill-mvp">&#127942; ' + U.escapeHtml(label) + '</span>' +
+          '<h4>' + U.escapeHtml(p ? p.name : "?") + "</h4>" +
+          '<p class="muted small">' + U.escapeHtml(div ? div.name : "") + " Division</p></div>";
+      });
+      html += "</div>";
+    }
+
     var retiredCount = S.getRetiredPlayers().length;
     html += '<div class="panel-header" style="margin-top:2rem"><h2>Offseason</h2></div>';
     html += '<div class="form-card"><p class="muted">Season ' + S.getSeason().seasonNumber + " &middot; Phase: " + S.getSeason().phase +
@@ -107,10 +137,13 @@
     }
     if (ageFactor <= 0) return;
 
-    // Bigger gaps close faster (up to ~1/3 of what's left per season),
-    // clamped to a sane per-season range so nobody leaps 40 points in a
-    // year, but a wide-open gap still moves meaningfully every season.
-    var maxStep = U.clamp(Math.round(gap * 0.35), 1, 8);
+    // Bigger gaps close faster, clamped to a sane per-season range so
+    // nobody leaps 40 points in a year, but a wide-open gap still moves
+    // meaningfully every season. Deliberately slower than it used to be —
+    // a playoff series win now also grants a one-time manual +1 overall
+    // pick (see js/playoffs.js onSeriesWon), so automatic growth alone is
+    // no longer the only way a player climbs toward their potential.
+    var maxStep = U.clamp(Math.round(gap * 0.22), 1, 5);
     var growth = Math.round(maxStep * ageFactor);
     if (growth <= 0) growth = 1; // any real development window guarantees at least +1
 

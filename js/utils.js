@@ -128,7 +128,7 @@
   // "crest-lg" (sidebar/team-detail header) — see css/style.css.
   function crestHtml(team, sizeClass) {
     if (!team) return "";
-    var color = colorForId(team.id);
+    var color = team.customColor || colorForId(team.id);
     var abbr = escapeHtml(team.abbr || "?");
     var classes = "team-crest " + (sizeClass || "");
     if (team.logoUrl) {

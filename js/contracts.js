@@ -133,7 +133,13 @@
     container.querySelectorAll('[data-action="release"]').forEach(function (b) {
       b.addEventListener("click", function () {
         var p = S.getPlayer(b.dataset.id);
-        if (p && confirm('Release "' + p.name + '" to free agency?')) {
+        if (!p) return;
+        if (!S.wouldMeetRosterMinimum(selectedTeamId, [p.id])) {
+          alert("Can't release " + p.name + " — every team must carry at least " + S.ROSTER_MIN.total + " players with a legal " +
+            S.ROSTER_MIN.F + "F/" + S.ROSTER_MIN.D + "D/" + S.ROSTER_MIN.G + "G lineup, and releasing them would drop you below it.");
+          return;
+        }
+        if (confirm('Release "' + p.name + '" to free agency?')) {
           S.updatePlayer(p.id, { teamId: null });
           render();
           if (window.PHLApp) window.PHLApp.refresh();

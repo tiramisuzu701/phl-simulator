@@ -24,6 +24,8 @@
     teamId: null,
     expName: "",
     expAbbr: "",
+    expColor: "#4f7cff",
+    expLogoDataUrl: null,
   };
 
   function starterDivisions() {
@@ -125,8 +127,16 @@
       '<label>Abbreviation<input type="text" id="f-exp-abbr" maxlength="4" value="' +
       U.escapeHtml(state.expAbbr) +
       '" placeholder="DEN"></label>';
+    html +=
+      '<label>Team color<input type="color" id="f-exp-color" value="' + U.escapeHtml(state.expColor) + '"></label>';
     html += "</div>";
-    html += '<p class="muted small">Your new team joins the division you pick above, alongside its existing teams, and drafts its very first roster in the Startup Draft just like everyone else.</p>';
+    html += '<label>Team logo (optional)<input type="file" id="f-exp-logo" accept="image/*"></label>';
+    html += '<div class="logo-upload-preview">' +
+      (state.expLogoDataUrl
+        ? '<img src="' + state.expLogoDataUrl + '" alt="Logo preview">'
+        : '<span class="muted small">No logo uploaded — a colored badge with your abbreviation will be used instead.</span>') +
+      "</div>";
+    html += '<p class="muted small">Your new team joins the division you pick above, alongside its existing teams, and drafts its very first roster in the Startup Draft just like everyone else. The color and logo you pick here show up everywhere your team\'s crest appears.</p>';
     html += "</div>";
     return html;
   }
@@ -210,6 +220,30 @@
         state.expAbbr = e.target.value;
       });
     }
+    var colorInput = root.querySelector("#f-exp-color");
+    if (colorInput) {
+      colorInput.addEventListener("input", function (e) {
+        state.expColor = e.target.value;
+      });
+    }
+    var logoInput = root.querySelector("#f-exp-logo");
+    if (logoInput) {
+      logoInput.addEventListener("change", function (e) {
+        var file = e.target.files && e.target.files[0];
+        if (!file) return;
+        if (file.size > 2 * 1024 * 1024) {
+          alert("That logo is a bit large (over 2MB) — pick a smaller image.");
+          logoInput.value = "";
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function (ev) {
+          state.expLogoDataUrl = ev.target.result;
+          renderWizard();
+        };
+        reader.readAsDataURL(file);
+      });
+    }
     root.querySelector('[data-action="submit"]').addEventListener("click", submitWizard);
   }
 
@@ -231,7 +265,14 @@
       }
       if (!abbr) abbr = name.slice(0, 3).toUpperCase();
       S.resetToStarter();
-      var newTeam = S.addTeam({ name: name, abbr: abbr, division: state.divisionId, isExpansionTeam: true });
+      var newTeam = S.addTeam({
+        name: name,
+        abbr: abbr,
+        division: state.divisionId,
+        isExpansionTeam: true,
+        customColor: state.expColor || null,
+        logoUrl: state.expLogoDataUrl || null,
+      });
       S.setFranchise(state.divisionId, newTeam.id);
       S.updateSettings({ startupDraftRounds: 6 });
     }

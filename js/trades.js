@@ -151,6 +151,15 @@
     var theirs = view.theirs.map(S.getPlayer).filter(Boolean);
     if (!mine.length || !theirs.length) return;
 
+    if (!S.wouldMeetRosterMinimum(myTeamId, view.mine, theirs)) {
+      alert("That trade would drop you below the required " + S.ROSTER_MIN.total + "-player, " + S.ROSTER_MIN.F + "F/" + S.ROSTER_MIN.D + "D/" + S.ROSTER_MIN.G + "G roster minimum.");
+      return;
+    }
+    if (!S.wouldMeetRosterMinimum(partnerId, view.theirs, mine)) {
+      alert("That trade would drop " + S.getTeam(partnerId).name + " below the roster minimum — they won't do it.");
+      return;
+    }
+
     var settings = S.getSettings();
     var myRosterAfter = S.getRoster(myTeamId).length - mine.length + theirs.length;
     var partnerRosterAfter = S.getRoster(partnerId).length - theirs.length + mine.length;
@@ -198,6 +207,14 @@
     });
     alert("Trade accepted! " + mine.map(function (p) { return p.name; }).join(", ") + " to " + S.getTeam(partnerId).name +
       "; " + theirs.map(function (p) { return p.name; }).join(", ") + " to " + S.getTeam(myTeamId).name + ".");
+    if (window.PHLInbox) {
+      window.PHLInbox.addNotification({
+        type: "trade",
+        title: "Trade completed",
+        body: "You traded " + mine.map(function (p) { return p.name; }).join(", ") + " to " + S.getTeam(partnerId).name +
+          " for " + theirs.map(function (p) { return p.name; }).join(", ") + ".",
+      });
+    }
     view.mine = [];
     view.theirs = [];
     render();

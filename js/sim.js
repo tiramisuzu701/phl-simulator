@@ -49,6 +49,16 @@
     return lineup.goalie ? lineup.goalie.attributes.goaltending : REPLACEMENT;
   }
 
+  // ---- Team chemistry (Scrims, js/scrims.js) ----------------------------
+  // A team's chemistry (0-100, baseline 50) nudges both its offense and
+  // defense a little in either direction — small enough to never dominate
+  // the sim, but a real, visible payoff for running scrims.
+  function chemistryRatingBonus(teamId) {
+    var t = S.getTeam(teamId);
+    var chem = t && t.chemistry != null ? t.chemistry : 50;
+    return (chem - 50) / 12; // roughly -4.2 .. +4.2
+  }
+
   function pickScorer(skaters, excludeId) {
     var pool = skaters.filter(function (p) { return p.id !== excludeId; });
     if (!pool.length) pool = skaters;
@@ -66,10 +76,12 @@
     var home = getActiveLineup(homeTeamId);
     var away = getActiveLineup(awayTeamId);
 
-    var homeOff = offenseRating(home);
-    var awayOff = offenseRating(away);
-    var homeDefEff = defenseRating(home) * 0.5 + goalieRating(home) * 0.5;
-    var awayDefEff = defenseRating(away) * 0.5 + goalieRating(away) * 0.5;
+    var homeChem = chemistryRatingBonus(homeTeamId);
+    var awayChem = chemistryRatingBonus(awayTeamId);
+    var homeOff = offenseRating(home) + homeChem;
+    var awayOff = offenseRating(away) + awayChem;
+    var homeDefEff = defenseRating(home) * 0.5 + goalieRating(home) * 0.5 + homeChem * 0.6;
+    var awayDefEff = defenseRating(away) * 0.5 + goalieRating(away) * 0.5 + awayChem * 0.6;
 
     var BASE = 3.1;
     var noiseHome = 0.85 + Math.random() * 0.3;
@@ -239,6 +251,44 @@
     return result;
   }
 
+  // ---- Playoff stat tracking (js/playoffs.js) ----------------------------
+  // Playoff games don't touch team wins/losses (the bracket/series objects
+  // already track who's winning) but DO need their own, separate player
+  // stat line (p.playoffStats) so playoff box scores and leaderboards work
+  // without polluting a player's regular-season totals.
+  function applyStatsToField(boxscore, field) {
+    Object.keys(boxscore.skaterLines).forEach(function (pid) {
+      var line = boxscore.skaterLines[pid];
+      var p = S.getPlayer(pid);
+      if (!p) return;
+      if (!p[field]) p[field] = S.freshStatLine();
+      var st = p[field];
+      st.gp += 1;
+      st.g += line.g;
+      st.a += line.a;
+      st.pts = st.g + st.a;
+      st.plusMinus += line.plusMinus;
+    });
+    Object.keys(boxscore.goalieLines).forEach(function (pid) {
+      var line = boxscore.goalieLines[pid];
+      var p = S.getPlayer(pid);
+      if (!p) return;
+      if (!p[field]) p[field] = S.freshStatLine();
+      var st = p[field];
+      st.gp += 1;
+      st.shotsAgainst += line.shotsAgainst;
+      st.saves += line.saves;
+      st.goalsAgainst += line.goalsAgainst;
+      st.svPct = st.shotsAgainst > 0 ? U.round3(st.saves / st.shotsAgainst) : 0;
+      st.gaa = st.gp > 0 ? U.round1(st.goalsAgainst / st.gp) : 0;
+    });
+  }
+
+  function applyPlayoffGame(result) {
+    applyStatsToField(result.boxscore, "playoffStats");
+    S.save();
+  }
+
   window.PHLSim = {
     getActiveLineup: getActiveLineup,
     offenseRating: offenseRating,
@@ -247,5 +297,6 @@
     simulateGame: simulateGame,
     applyResult: applyResult,
     simulateAndApply: simulateAndApply,
+    applyPlayoffGame: applyPlayoffGame,
   };
 })();
