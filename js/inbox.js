@@ -61,6 +61,15 @@
       S.removeNotification(notif.id);
       return;
     }
+    if (!S.wouldMeetGoalieMax(payload.userTeamId, [userGives.id], [aiGives])) {
+      alert("Accepting would leave you with more than " + S.GOALIE_MAX + " goalies — the most a team can hold.");
+      return;
+    }
+    if (!S.wouldMeetGoalieMax(payload.aiTeamId, [aiGives.id], [userGives])) {
+      alert(aiTeam.name + " can no longer make this trade — it would leave them with too many goalies.");
+      S.removeNotification(notif.id);
+      return;
+    }
     var myCapAfter = S.capForTeam(payload.userTeamId) - (S.capUsed(payload.userTeamId) - userGives.salary + aiGives.salary);
     if (myCapAfter < 0) {
       alert("Accepting would put you over your salary cap by " + U.formatMoney(Math.abs(myCapAfter)) + ".");

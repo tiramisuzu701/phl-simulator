@@ -83,6 +83,15 @@
         window.PHLApp.showTab(b.dataset.goto);
       });
     });
+    var simBtn = container.querySelector('[data-action="sim-my-games"]');
+    if (simBtn) {
+      simBtn.addEventListener("click", function () {
+        var games = window.PHLCalendar ? window.PHLCalendar.simulateMyGamesThisWeek() : [];
+        render();
+        if (window.PHLApp) window.PHLApp.refreshAll();
+        if (games.length && window.PHLBoxscoreModal) window.PHLBoxscoreModal.showGames(games);
+      });
+    }
   }
 
   // Recent games (played, most recent first) for `teamId`, tagged with
@@ -117,11 +126,20 @@
   function renderMyTeamHub(myTeam) {
     var recent = recentForm(myTeam.id, 5);
     var upcoming = upcomingGames(myTeam.id, 3);
+    // Regular-season only (see js/calendar.js myUnplayedGamesThisWeek) —
+    // the user has to sim their own game(s) for the current week here
+    // before Advance Week (top right) will unlock, so they always see
+    // their own box score before the rest of the league plays out.
+    var myGamesThisWeek = window.PHLCalendar ? window.PHLCalendar.myUnplayedGamesThisWeek() : [];
     var cap = S.capForTeam(myTeam.id);
     var used = S.capUsed(myTeam.id);
     var space = S.capSpace(myTeam.id);
     var pct = U.clamp(cap ? (used / cap) * 100 : 0, 0, 100);
-    var rosterOk = S.wouldMeetRosterMinimum(myTeam.id);
+    // Check the TRUE minimum here (not the offseason-relaxed wrapper) so
+    // the dashboard always shows the real state, with off-season framed as
+    // a grace period rather than blanket "you're fine."
+    var rosterOk = S.rosterMeetsMinimum(S.getRoster(myTeam.id));
+    var isOffseason = S.getSeason().phase === "offseason";
     var unread = S.unreadNotificationCount();
     var recentNotifs = S.getNotifications().slice(0, 3);
 
@@ -139,6 +157,25 @@
           U.escapeHtml(opp ? opp.abbr : "?") + ' (Week ' + r.game.week + ')">' + r.result + '</span>';
       });
       html += "</div>";
+    }
+    html += "</div>";
+
+    html += '<div class="hub-section' + (myGamesThisWeek.length ? " hub-section-alert" : "") + '"><h4>This Week</h4>';
+    if (myGamesThisWeek.length) {
+      html += '<p class="pill pill-warn small">Simulate your team\'s game' + (myGamesThisWeek.length > 1 ? "s" : "") +
+        " before you can advance to next week.</p>";
+      html += '<ul class="mini-standings">';
+      myGamesThisWeek.forEach(function (g) {
+        var isHome = g.homeTeamId === myTeam.id;
+        var opp = S.getTeam(isHome ? g.awayTeamId : g.homeTeamId);
+        html += "<li><span>" + (isHome ? "vs " : "@ ") + U.escapeHtml(opp ? opp.abbr : "?") + "</span></li>";
+      });
+      html += "</ul>";
+      html += '<button class="btn btn-primary btn-sm" data-action="sim-my-games">Sim My Game' + (myGamesThisWeek.length > 1 ? "s" : "") + '</button>';
+    } else {
+      html += '<p class="muted small">' +
+        (S.getSeason().phase === "regular" ? "No game to simulate this week." : "Nothing to simulate right now.") +
+        "</p>";
     }
     html += "</div>";
 
@@ -163,9 +200,13 @@
     html += "</div>";
 
     html += '<div class="hub-section"><h4>Roster Status</h4>';
-    html += rosterOk
-      ? '<p class="muted small">Meets the ' + S.ROSTER_MIN.total + "-player roster minimum (" + S.ROSTER_MIN.F + "F/" + S.ROSTER_MIN.D + "D/" + S.ROSTER_MIN.G + "G).</p>"
-      : '<p class="pill pill-warn small">Below the roster minimum &mdash; sign or call up players before advancing.</p>';
+    if (rosterOk) {
+      html += '<p class="muted small">Meets the ' + S.ROSTER_MIN.total + "-player roster minimum (" + S.ROSTER_MIN.F + "F/" + S.ROSTER_MIN.D + "D/" + S.ROSTER_MIN.G + "G).</p>";
+    } else if (isOffseason) {
+      html += '<p class="pill pill-warn small">Below the roster minimum &mdash; allowed during the off-season, but sign or call up players before the season starts.</p>';
+    } else {
+      html += '<p class="pill pill-warn small">Below the roster minimum &mdash; sign or call up players before advancing.</p>';
+    }
     if (!S.isTransactionWindowOpen()) html += '<p class="pill pill-warn small">Trade deadline passed &mdash; transactions locked.</p>';
     html += "</div>";
 

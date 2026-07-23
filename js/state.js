@@ -358,7 +358,11 @@
   // ---------------- Roster minimum (2F / 2D / 1G, 5 players min) --------
   // Enforced for EVERY team (AI included) — see js/contracts.js (release),
   // js/trades.js (both sides of any trade), js/promotions.js (donor side
-  // of a call-up), and js/aiManager.js (AI cap-compliance releases).
+  // of a call-up), and js/aiManager.js (AI cap-compliance releases). Only
+  // enforced OUTSIDE the off-season — the off-season is a rebuilding
+  // window where a roster is allowed to dip below the minimum (see
+  // wouldMeetRosterMinimum below); it's a hard block again the moment the
+  // regular season starts.
   var ROSTER_MIN = { F: 2, D: 2, G: 1, total: 5 };
   function rosterMeetsMinimum(players) {
     var counts = { F: 0, D: 0, G: 0 };
@@ -368,13 +372,35 @@
   // Would `teamId`'s roster still meet the hard minimum if `removeIds` left
   // and `addPlayers` (full player objects, e.g. an incoming trade piece)
   // joined? Pass no removeIds/addPlayers to just check the current roster.
+  // Always true during the off-season — see the note above.
   function wouldMeetRosterMinimum(teamId, removeIds, addPlayers) {
+    if (data.season && data.season.phase === "offseason") return true;
     removeIds = removeIds || [];
     addPlayers = addPlayers || [];
     var roster = getRoster(teamId)
       .filter(function (p) { return removeIds.indexOf(p.id) === -1; })
       .concat(addPlayers);
     return rosterMeetsMinimum(roster);
+  }
+
+  // ---------------- Goalie sub-cap (max 3 per team) -----------------------
+  // Enforced anywhere a goalie can join a roster (signing, trading,
+  // promoting, the Startup Draft) — see js/contracts.js, js/trades.js,
+  // js/promotions.js, js/aiManager.js, js/startupDraft.js.
+  var GOALIE_MAX = 3;
+  function goalieCountForTeam(teamId) {
+    return getRoster(teamId).filter(function (p) { return p.position === "G"; }).length;
+  }
+  // Would `teamId`'s roster still be at/under the goalie sub-cap if
+  // `removeIds` left and `addPlayers` joined?
+  function wouldMeetGoalieMax(teamId, removeIds, addPlayers) {
+    removeIds = removeIds || [];
+    addPlayers = addPlayers || [];
+    var goalieCount = getRoster(teamId)
+      .filter(function (p) { return removeIds.indexOf(p.id) === -1; })
+      .concat(addPlayers)
+      .filter(function (p) { return p.position === "G"; }).length;
+    return goalieCount <= GOALIE_MAX;
   }
 
   // ---------------- Notifications (Inbox) --------------------------------
@@ -448,6 +474,21 @@
     return !!teamId && data.franchise.teamId === teamId;
   }
 
+  // Is `teamId` the user's own team, or another team in the user's own
+  // division? Used to scope league-wide push notifications (Inbox entries
+  // for AI trades, MVP awards, division championships, etc. — see
+  // js/aiManager.js, js/calendar.js, js/mvp.js, js/playoffs.js) down to
+  // "your team + your division" instead of firing for the whole league.
+  // Trade History / Promotion History and similar log tables are NOT
+  // affected by this — they keep showing every event league-wide.
+  function isUserRelevantTeam(teamId) {
+    if (!teamId) return false;
+    if (isManagedTeam(teamId)) return true;
+    var myTeam = getTeam(data.franchise.teamId);
+    var t = getTeam(teamId);
+    return !!(myTeam && t && myTeam.division === t.division);
+  }
+
   // ---------------- Cap helpers ----------------
   // Salary cap is per-division (top divisions have bigger budgets), not a
   // single league-wide number. Each team's effective cap also scales up
@@ -495,8 +536,10 @@
   // point: Startup Draft picks, trades, promotions/call-ups, and free-agent
   // signings, for both the user and AI teams (see js/trades.js,
   // js/contracts.js, js/promotions.js, js/aiManager.js, js/startupDraft.js).
-  // Player growth (js/stats.js developPlayer) is also capped at this
-  // ceiling for currently-rostered players.
+  // Growth (js/stats.js developPlayer, js/playoffs.js series-win bumps) is
+  // NOT capped — a player who crosses the cutoff mid-season finishes that
+  // season on the roster; see releasePlayersAboveOverallCutoff below for
+  // what happens to them once the off-season begins.
   function overallCapForDivision(divisionId) {
     var div = getDivision(divisionId);
     return div && div.overallCap != null ? div.overallCap : null;
@@ -505,6 +548,27 @@
     var cap = overallCapForDivision(divisionId);
     if (cap == null) return true;
     return overall <= cap;
+  }
+  // Force-releases any rostered player who's currently above their
+  // division's overall cutoff — called once each time the off-season
+  // begins (see js/calendar.js runPlayoffsWeek). A player can grow past
+  // the cutoff mid-season and keep playing (see developPlayer/onSeriesWon),
+  // but a team has to let them walk once the season that happened in ends.
+  // NMC does NOT protect against this — it's a forced compliance cut, not
+  // a voluntary roster move. Returns the list of released players.
+  function releasePlayersAboveOverallCutoff() {
+    var released = [];
+    data.players.forEach(function (p) {
+      if (!p.teamId || p.retired) return;
+      var team = getTeam(p.teamId);
+      if (!team) return;
+      if (!meetsOverallCap(p.overall, team.division)) {
+        released.push({ player: p, teamId: p.teamId });
+        p.teamId = null;
+      }
+    });
+    if (released.length) save();
+    return released;
   }
 
   // ---------------- No-Movement Clause (NMC) ------------------------------
@@ -587,6 +651,7 @@
     snapshotTeamRecordsForCap: snapshotTeamRecordsForCap,
     overallCapForDivision: overallCapForDivision,
     meetsOverallCap: meetsOverallCap,
+    releasePlayersAboveOverallCutoff: releasePlayersAboveOverallCutoff,
     NMC_MAX_PER_TEAM: NMC_MAX_PER_TEAM,
     nmcCountForTeam: nmcCountForTeam,
     isTransactionWindowOpen: isTransactionWindowOpen,
@@ -609,9 +674,13 @@
     getTrades: getTrades,
     addTrade: addTrade,
     isManagedTeam: isManagedTeam,
+    isUserRelevantTeam: isUserRelevantTeam,
     ROSTER_MIN: ROSTER_MIN,
     rosterMeetsMinimum: rosterMeetsMinimum,
     wouldMeetRosterMinimum: wouldMeetRosterMinimum,
+    GOALIE_MAX: GOALIE_MAX,
+    goalieCountForTeam: goalieCountForTeam,
+    wouldMeetGoalieMax: wouldMeetGoalieMax,
     getNotifications: getNotifications,
     addNotification: addNotification,
     markNotificationRead: markNotificationRead,

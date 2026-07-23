@@ -222,11 +222,12 @@
         .sort(function (a, b) { return (b.potential - b.overall) - (a.potential - a.overall); });
       var best = roster[0];
       if (best) {
-        var bestCap = S.overallCapForDivision(winnerTeam ? winnerTeam.division : null);
+        // Allowed to push a player past their division's overall cutoff
+        // mid-season — see js/state.js releasePlayersAboveOverallCutoff,
+        // which cleans this up at the next off-season.
         var bestNewOverall = U.clamp(best.overall + 1, best.overall, best.potential);
-        if (bestCap != null) bestNewOverall = Math.min(bestNewOverall, bestCap);
         S.updatePlayer(best.id, { overall: bestNewOverall });
-        if (window.PHLInbox) {
+        if (window.PHLInbox && S.isUserRelevantTeam(winnerId)) {
           window.PHLInbox.addNotification({
             type: "playoff",
             title: (winnerTeam ? winnerTeam.name : "A team") + " wins a series",
@@ -246,12 +247,9 @@
     if (idx === -1) return false;
     var p = S.getPlayer(playerId);
     if (p) {
+      // Allowed to push a player past their division's overall cutoff
+      // mid-season — see js/state.js releasePlayersAboveOverallCutoff.
       var newOverall = U.clamp(p.overall + 1, p.overall, p.potential);
-      if (p.teamId) {
-        var pTeam = S.getTeam(p.teamId);
-        var pCap = pTeam ? S.overallCapForDivision(pTeam.division) : null;
-        if (pCap != null) newOverall = Math.min(newOverall, pCap);
-      }
       S.updatePlayer(p.id, { overall: newOverall });
     }
     pending.splice(idx, 1);

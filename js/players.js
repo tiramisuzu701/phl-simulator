@@ -1,12 +1,13 @@
-/* PHL Franchise Simulator — Players editor (roster database)
+/* PHL Franchise Simulator — Players database (browse-only)
  * Global namespace: window.PHLPlayers
  *
- * Visible player fields are intentionally simple: Nametag, Position,
- * Archetype, Overall, Potential, Team, Salary, Contract Years. Age is a
- * hidden internal mechanic (see utils.js) and is never shown or editable
- * here. The offense/defense/goaltending numbers the sim engine actually
- * uses are derived from Overall + Position + Archetype (utils.deriveAttributes)
- * rather than entered by hand.
+ * A read-only browser of every player in the league — filter by pool,
+ * division, team, or position, set your own team's starters, or delete a
+ * player outright. Manually editing a player's stats (Overall, Potential,
+ * Salary, etc.) is not possible — every player's numbers come from the
+ * real roster sweep, the Startup Draft, breakout rookie generation, or
+ * "Generate Sample Roster", never hand-typed, so results stay honest to
+ * the simulator's own math.
  */
 (function () {
   "use strict";
@@ -28,8 +29,8 @@
     html += '<div class="panel-header"><h2>Player Database</h2>' +
       '<div class="header-actions">' +
       '<button class="btn" data-action="gen-sample">Generate Sample Roster</button>' +
-      '<button class="btn btn-primary" data-action="new-player">+ Add Player</button>' +
       "</div></div>";
+    html += '<p class="muted small">Browse-only — player stats aren\'t hand-editable. Every number here comes from the real roster sweep, the Startup Draft, breakout rookie generation, or the sample-roster generator.</p>';
 
     html += '<div class="filter-bar">';
     html += '<select id="filt-pool"><option value="roster">On a Team</option><option value="fa">Free Agents</option><option value="pool">Draft Pool</option><option value="startup">Startup Draft Pool</option><option value="retired">Retired</option><option value="all">All Players</option></select>';
@@ -46,7 +47,6 @@
     html += '<select id="filt-position"><option value="">All Positions</option><option value="F">Forward</option><option value="D">Defense</option><option value="G">Goalie</option></select>';
     html += "</div>";
 
-    html += '<div id="player-form-panel"></div>';
     html += '<div id="player-table-wrap"></div>';
 
     container.innerHTML = html;
@@ -112,7 +112,6 @@
         html += "<td>&mdash;</td>";
       }
       html += '<td class="row-actions">' +
-        '<button class="btn btn-sm" data-action="edit-player" data-id="' + p.id + '">Edit</button>' +
         '<button class="btn btn-sm btn-danger" data-action="delete-player" data-id="' + p.id + '">Del</button>' +
         "</td>";
       html += "</tr>";
@@ -121,11 +120,6 @@
     html += '<p class="muted small">Lineup: click a rostered player\'s Starter/Bench button to set who plays. If a team doesn\'t have enough starters manually set at a position, the simulator automatically falls back to its best available players there — nothing breaks if you never touch this.</p>';
     wrap.innerHTML = html;
 
-    wrap.querySelectorAll('[data-action="edit-player"]').forEach(function (b) {
-      b.addEventListener("click", function () {
-        showForm(S.getPlayer(b.dataset.id));
-      });
-    });
     wrap.querySelectorAll('[data-action="delete-player"]').forEach(function (b) {
       b.addEventListener("click", function () {
         var p = S.getPlayer(b.dataset.id);
@@ -168,114 +162,12 @@
       filters.position = e.target.value;
       renderTable();
     });
-    container.querySelector('[data-action="new-player"]').addEventListener("click", function () {
-      showForm(null);
-    });
     container.querySelector('[data-action="gen-sample"]').addEventListener("click", function () {
       if (confirm("Generate a randomized sample roster for every team that currently has fewer than 10 players? This is meant for testing the simulator — you can edit or delete these players any time.")) {
         generateSampleRosters();
         render();
         if (window.PHLApp) window.PHLApp.refresh();
       }
-    });
-  }
-
-  function archetypeOptionsHtml(position, selected) {
-    return U.archetypesFor(position).map(function (a) {
-      return '<option value="' + U.escapeHtml(a.name) + '"' + (a.name === selected ? " selected" : "") + ">" + U.escapeHtml(a.name) + "</option>";
-    }).join("");
-  }
-
-  function showForm(player) {
-    var panel = container.querySelector("#player-form-panel");
-    var isEdit = !!player;
-    player = player || {
-      id: "",
-      name: "",
-      position: "F",
-      archetype: U.randomArchetype("F"),
-      overall: 70,
-      potential: 75,
-      salary: U.salaryAsking(70, 75),
-      contractYears: 2,
-      teamId: "",
-      isDraftProspect: false,
-    };
-    var teams = S.getTeams().slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
-
-    var html = '<div class="form-card">';
-    html += "<h3>" + (isEdit ? "Edit Player" : "Add Player") + "</h3>";
-    html += '<div class="form-grid">';
-    html += '<label>Nametag<input type="text" id="pf-name" value="' + U.escapeHtml(player.name) + '"></label>';
-    html += '<label>Position<select id="pf-position">' +
-      '<option value="F"' + (player.position === "F" ? " selected" : "") + ">Forward</option>" +
-      '<option value="D"' + (player.position === "D" ? " selected" : "") + ">Defense</option>" +
-      '<option value="G"' + (player.position === "G" ? " selected" : "") + ">Goalie</option>" +
-      "</select></label>";
-    html += '<label>Archetype<select id="pf-archetype">' + archetypeOptionsHtml(player.position, player.archetype) + "</select></label>";
-    html += '<label>Overall (1-99)<input type="number" id="pf-overall" min="1" max="99" value="' + player.overall + '"></label>';
-    html += '<label>Potential (1-99)<input type="number" id="pf-potential" min="1" max="99" value="' + player.potential + '"></label>';
-    html += '<label>Salary ($/yr)<input type="number" id="pf-salary" min="0" step="500" value="' + player.salary + '"></label>';
-    html += '<label>Contract years<input type="number" id="pf-years" min="0" max="8" value="' + (player.contractYears != null ? player.contractYears : 2) + '"></label>';
-    html += '<label>Team<select id="pf-team"><option value="">Free Agent</option>';
-    teams.forEach(function (t) {
-      html += '<option value="' + t.id + '"' + (player.teamId === t.id ? " selected" : "") + ">" + U.escapeHtml(t.name) + " (" + t.abbr + ")</option>";
-    });
-    html += "</select></label>";
-    html += "</div>";
-    html += '<p class="muted small">Age is tracked internally (PHL doesn\'t publish ages) and quietly drives skill decline after ~' + S.getSettings().declineStartAge + ' and retirement in the low-to-mid 30s — nothing to fill in here.</p>';
-    html += '<div class="form-actions">';
-    html += '<button class="btn" data-action="auto-salary">Auto Price from OVR/POT</button>';
-    html += '<button class="btn btn-primary" data-action="save-player">' + (isEdit ? "Save" : "Add Player") + "</button>";
-    html += '<button class="btn" data-action="cancel-player">Cancel</button>';
-    html += "</div></div>";
-    panel.innerHTML = html;
-
-    panel.querySelector("#pf-position").addEventListener("change", function (e) {
-      panel.querySelector("#pf-archetype").innerHTML = archetypeOptionsHtml(e.target.value, null);
-    });
-    panel.querySelector('[data-action="auto-salary"]').addEventListener("click", function () {
-      var ovr = parseInt(panel.querySelector("#pf-overall").value, 10) || 60;
-      var pot = parseInt(panel.querySelector("#pf-potential").value, 10) || ovr;
-      panel.querySelector("#pf-salary").value = U.salaryAsking(ovr, pot);
-    });
-    panel.querySelector('[data-action="cancel-player"]').addEventListener("click", function () {
-      panel.innerHTML = "";
-    });
-    panel.querySelector('[data-action="save-player"]').addEventListener("click", function () {
-      var name = panel.querySelector("#pf-name").value.trim();
-      if (!name) {
-        alert("Player nametag is required.");
-        return;
-      }
-      var position = panel.querySelector("#pf-position").value;
-      var overall = U.clamp(parseInt(panel.querySelector("#pf-overall").value, 10) || 60, 1, 99);
-      var potential = U.clamp(parseInt(panel.querySelector("#pf-potential").value, 10) || overall, 1, 99);
-      if (potential < overall) potential = overall; // potential is a ceiling, never below current overall
-      var archetype = panel.querySelector("#pf-archetype").value;
-      var patch = {
-        name: name,
-        position: position,
-        archetype: archetype,
-        overall: overall,
-        potential: potential,
-        attributes: U.deriveAttributes(overall, position, archetype),
-        salary: parseFloat(panel.querySelector("#pf-salary").value) || 0,
-        contractYears: parseInt(panel.querySelector("#pf-years").value, 10) || 0,
-        teamId: panel.querySelector("#pf-team").value || null,
-        isDraftProspect: false,
-      };
-      if (isEdit) {
-        S.updatePlayer(player.id, patch);
-      } else {
-        patch.stats = S.freshStatLine();
-        patch.age = U.generateStartingAge();
-        patch.retirementAge = U.retirementAgeFor(patch.age);
-        S.addPlayer(patch);
-      }
-      panel.innerHTML = "";
-      render();
-      if (window.PHLApp) window.PHLApp.refresh();
     });
   }
 

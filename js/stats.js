@@ -19,12 +19,24 @@
     return filtered.slice(0, limit || 10);
   }
 
+  // Stats can only ever be viewed one division at a time (no more "All
+  // Divisions") — defaults to the user's own division the first time the
+  // tab is opened, but the user can still switch to any other division.
+  function effectiveDivFilter() {
+    if (divFilter) return divFilter;
+    var franchise = S.getFranchise();
+    var divisions = S.getDivisions();
+    if (franchise && franchise.divisionId) return franchise.divisionId;
+    return divisions.length ? divisions[0].id : "";
+  }
+
   function playersInScope() {
     var players = S.getPlayers().filter(function (p) { return !p.isDraftProspect && !p.retired; });
-    if (!divFilter) return players;
+    var div = effectiveDivFilter();
+    if (!div) return players;
     return players.filter(function (p) {
       var t = p.teamId ? S.getTeam(p.teamId) : null;
-      return t && t.division === divFilter;
+      return t && t.division === div;
     });
   }
 
@@ -56,10 +68,11 @@
     var skaters = players.filter(function (p) { return p.position !== "G" && p.stats.gp > 0; });
     var goalies = players.filter(function (p) { return p.position === "G" && p.stats.gp > 0; });
 
+    var activeDiv = effectiveDivFilter();
     var html = '<div class="panel-header"><h2>League Leaders</h2></div>';
-    html += '<div class="filter-bar"><select id="stats-division"><option value="">All Divisions</option>';
+    html += '<div class="filter-bar"><select id="stats-division">';
     divisions.forEach(function (d) {
-      html += '<option value="' + d.id + '"' + (divFilter === d.id ? " selected" : "") + ">" + U.escapeHtml(d.name) + "</option>";
+      html += '<option value="' + d.id + '"' + (activeDiv === d.id ? " selected" : "") + ">" + U.escapeHtml(d.name) + "</option>";
     });
     html += "</select></div>";
 
@@ -147,17 +160,14 @@
     var growth = Math.round(maxStep * ageFactor);
     if (growth <= 0) growth = 1; // any real development window guarantees at least +1
 
+    // Growth is NOT clamped at the division overall cutoff here — a player
+    // who grows past it mid-season is allowed to finish that season on the
+    // roster (see js/state.js releasePlayersAboveOverallCutoff, run once
+    // each time the off-season begins, which force-releases anyone still
+    // over their division's cutoff at that point). The cutoff still blocks
+    // a player from being SIGNED, TRADED, PROMOTED, or DRAFTED into a
+    // division above it in the first place.
     p.overall = U.clamp(p.overall + growth, p.overall, p.potential);
-    // Currently-rostered players can't grow past their division's overall
-    // cutoff (see js/state.js overallCapForDivision) — a free agent has no
-    // team/division context yet, so their growth stays uncapped here; the
-    // cutoff instead blocks them at the moment they'd be signed into a
-    // capped division (see js/contracts.js sendOffer).
-    if (p.teamId) {
-      var team = S.getTeam(p.teamId);
-      var cap = team ? S.overallCapForDivision(team.division) : null;
-      if (cap != null) p.overall = Math.min(p.overall, cap);
-    }
     p.attributes = U.deriveAttributes(p.overall, p.position, p.archetype);
   }
 

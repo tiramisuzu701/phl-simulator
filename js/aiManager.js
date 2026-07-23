@@ -48,6 +48,7 @@
         var candidates = S.getFreeAgents().filter(function (p) {
           if (!isEligible(p, team.division)) return false;
           if (!S.meetsOverallCap(p.overall, team.division)) return false;
+          if (p.position === "G" && counts.G >= S.GOALIE_MAX) return false;
           var asking = U.contractAskingPrice(p, division ? division.tier : null);
           if (asking > space) return false;
           return neededPos ? p.position === neededPos : counts[p.position] < 4; // depth cap when no urgent need
@@ -157,6 +158,8 @@
         if (!giveCandidate || !getCandidate) continue;
         if (!S.wouldMeetRosterMinimum(a.id, [giveCandidate.id], [getCandidate])) continue;
         if (!S.wouldMeetRosterMinimum(b.id, [getCandidate.id], [giveCandidate])) continue;
+        if (!S.wouldMeetGoalieMax(a.id, [giveCandidate.id], [getCandidate])) continue;
+        if (!S.wouldMeetGoalieMax(b.id, [getCandidate.id], [giveCandidate])) continue;
         var capAOk = S.capForTeam(a.id) >= (S.capUsed(a.id) - giveCandidate.salary + getCandidate.salary);
         var capBOk = S.capForTeam(b.id) >= (S.capUsed(b.id) - getCandidate.salary + giveCandidate.salary);
         if (!capAOk || !capBOk) continue;
@@ -168,7 +171,10 @@
         S.updatePlayer(getCandidate.id, { teamId: a.id });
         S.addTrade({ season: S.getSeason().seasonNumber || 1, teamAId: a.id, teamBId: b.id, playersToB: [giveCandidate.id], playersToA: [getCandidate.id] });
         completed.push({ teamAId: a.id, teamBId: b.id, playerToB: giveCandidate.id, playerToA: getCandidate.id });
-        if (window.PHLInbox) {
+        // Only push a notification when this trade is in the user's own
+        // division (a and b are always in the same division here) — still
+        // logged in Trade History league-wide via S.addTrade above either way.
+        if (window.PHLInbox && S.isUserRelevantTeam(a.id)) {
           window.PHLInbox.addNotification({
             type: "trade",
             title: "In-division trade",
@@ -225,6 +231,8 @@
     if (!gives) return [];
     if (!S.wouldMeetRosterMinimum(partner.id, [gives.id], [wants])) return [];
     if (!S.wouldMeetRosterMinimum(myTeam.id, [wants.id], [gives])) return [];
+    if (!S.wouldMeetGoalieMax(partner.id, [gives.id], [wants])) return [];
+    if (!S.wouldMeetGoalieMax(myTeam.id, [wants.id], [gives])) return [];
 
     Inbox.addTradeOffer(partner.id, myTeam.id, gives.id, wants.id);
     return [{ aiTeamId: partner.id, userTeamId: myTeam.id }];

@@ -95,6 +95,7 @@
         var totalCost = fee + newSalary;
         var affordable = totalCost <= space;
         var withinCap = S.meetsOverallCap(p.overall, team.division);
+        var goalieOk = p.position !== "G" || S.wouldMeetGoalieMax(team.id, [], [p]);
         html += "<tr><td>" + U.escapeHtml(p.name) + "</td><td>" + p.position + "</td><td>" + U.escapeHtml(p.archetype || "") + "</td><td><strong>" + p.overall + "</strong></td><td>" + p.potential + "</td>";
         html += "<td>" + U.escapeHtml(pt ? pt.name : "?") + " <span class=\"muted\">(" + U.escapeHtml(S.getDivision(pt.division).name) + ")</span></td>";
         html += "<td>" + U.formatMoney(newSalary) + "</td><td>" + U.formatMoney(fee) + "</td>";
@@ -104,6 +105,8 @@
           html += '<td><span class="pill pill-warn" title="No-Movement Clause">NMC protected</span></td></tr>';
         } else if (!withinCap) {
           html += '<td><span class="pill pill-warn" title="Above this division\'s overall cutoff">Exceeds overall cutoff</span></td></tr>';
+        } else if (!goalieOk) {
+          html += '<td><span class="pill pill-warn" title="Already carrying the max ' + S.GOALIE_MAX + ' goalies">Goalie cap reached</span></td></tr>';
         } else if (!affordable) {
           html += '<td><span class="pill pill-warn" title="Needs ' + U.formatMoney(totalCost) + ' in cap space (salary + fee)">Not enough cap</span></td></tr>';
         } else {
@@ -137,8 +140,14 @@
     var player = S.getPlayer(playerId);
     var toTeam = S.getTeam(toTeamId);
     if (!player || !toTeam || !player.teamId) return false;
+    // This function is shared by the user's own "Call Up" button AND the
+    // automated AI promotion loop (js/aiManager.js aiRunPromotions) — only
+    // pop a notice when the ACTING team is the one the human GM manages, so
+    // an AI team quietly failing a call-up attempt doesn't surface as a
+    // pop-up about a team the user isn't playing.
+    var notify = S.isManagedTeam(toTeamId);
     if (!isOffseasonWindow()) {
-      alert("Promotions are only available in the off-season.");
+      if (notify) alert("Promotions are only available in the off-season.");
       return false;
     }
     var fromTeamId = player.teamId;
@@ -156,20 +165,20 @@
       // Enforce the same strictly-lower-tier rule the UI uses to build the
       // eligible list — don't just trust the caller. Prevents same-tier or
       // reverse (higher-to-lower) "promotions" from ever slipping through.
-      alert(player.name + " isn't eligible to be called up to " + toTeam.name + " (not in a lower division).");
+      if (notify) alert(player.name + " isn't eligible to be called up to " + toTeam.name + " (not in a lower division).");
       return false;
     }
     if (!S.wouldMeetRosterMinimum(fromTeamId, [playerId])) {
-      alert("Calling up " + player.name + " would drop " + (fromTeam ? fromTeam.name : "their current team") +
+      if (notify) alert("Calling up " + player.name + " would drop " + (fromTeam ? fromTeam.name : "their current team") +
         " below the required " + S.ROSTER_MIN.total + "-player roster minimum — the move can't go through.");
       return false;
     }
     if (player.nmc) {
-      alert(player.name + " has a No-Movement Clause and can't be moved while it's active.");
+      if (notify) alert(player.name + " has a No-Movement Clause and can't be moved while it's active.");
       return false;
     }
     if (!S.meetsOverallCap(player.overall, toTeam.division)) {
-      alert(player.name + " (" + player.overall + " OVR) is above the " + S.getDivision(toTeam.division).name + " division's " +
+      if (notify) alert(player.name + " (" + player.overall + " OVR) is above the " + S.getDivision(toTeam.division).name + " division's " +
         S.overallCapForDivision(toTeam.division) + " overall cutoff and can't be called up there.");
       return false;
     }
@@ -178,12 +187,16 @@
     var totalCost = fee + newSalary;
     var space = S.capSpace(toTeamId);
     if (totalCost > space) {
-      alert("Not enough cap space to call up " + player.name + " (needs " + U.formatMoney(totalCost) + " — salary + call-up fee — but only " + U.formatMoney(space) + " is available).");
+      if (notify) alert("Not enough cap space to call up " + player.name + " (needs " + U.formatMoney(totalCost) + " — salary + call-up fee — but only " + U.formatMoney(space) + " is available).");
       return false;
     }
     var roster = S.getRoster(toTeamId);
     if (roster.length >= S.getSettings().rosterMax) {
-      alert("Roster is full (" + S.getSettings().rosterMax + " players). Release someone first.");
+      if (notify) alert("Roster is full (" + S.getSettings().rosterMax + " players). Release someone first.");
+      return false;
+    }
+    if (player.position === "G" && !S.wouldMeetGoalieMax(toTeamId, [], [player])) {
+      if (notify) alert(toTeam.name + " already carries " + S.GOALIE_MAX + " goalies — the most a team can hold.");
       return false;
     }
     S.updatePlayer(playerId, { teamId: toTeamId, salary: newSalary, contractYears: 3, starter: false });

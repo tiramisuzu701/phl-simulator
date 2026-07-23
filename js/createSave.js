@@ -9,7 +9,10 @@
  *   - Create an Expansion Franchise -> settings.startupDraftRounds = 6
  * (one extra team drafting from the same fixed-size real player pool, so
  * fewer rounds keeps the draft from running dry even faster than it
- * already does — see js/startupDraft.js.)
+ * already does — see js/startupDraft.js.) This setting only ever governs
+ * the Contender/Prospect phases — the Pro division always drafts a fixed
+ * 6 rounds regardless of Expansion mode (see roundsForPhase in
+ * js/startupDraft.js).
  */
 (function () {
   "use strict";

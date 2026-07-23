@@ -13,6 +13,7 @@
   "use strict";
   var S = window.PHLState;
   var U = window.PHLUtil;
+  var Sim = window.PHLSim;
 
   function settings() {
     return S.getSettings();
@@ -58,7 +59,46 @@
           " over the salary cap. Release a player in the Contracts tab before advancing.";
       }
     }
+    // Regular-season only (see myUnplayedGamesThisWeek) — the user has to
+    // sim their own game(s) for the week from the Dashboard before the rest
+    // of the league's games can play out, so they always get a look at
+    // their own box score first.
+    var myGames = myUnplayedGamesThisWeek();
+    if (myGames.length) {
+      return "Simulate your team's game" + (myGames.length > 1 ? "s" : "") + " for this week on the Dashboard before advancing.";
+    }
     return null;
+  }
+
+  // The user's own unplayed game(s) for the CURRENT calendar week — only
+  // meaningful during the regular season (playoffs keep their existing Sim
+  // Game/Sim Series controls, and offseason/break weeks have no games at
+  // all). Empty array means either it's not the regular season, this is a
+  // trade-deadline break week, or the user's team has a bye this week — in
+  // every one of those cases Advance Week should NOT be gated.
+  function myUnplayedGamesThisWeek() {
+    var franchise = S.getFranchise();
+    if (!franchise || !franchise.teamId) return [];
+    var season = S.getSeason();
+    if (season.phase !== "regular") return [];
+    if (BREAK_WEEKS.indexOf(season.calendarWeek) !== -1) return [];
+    return S.getSchedule().filter(function (g) {
+      return g.week === season.calendarWeek && !g.played &&
+        (g.homeTeamId === franchise.teamId || g.awayTeamId === franchise.teamId);
+    });
+  }
+
+  // Simulates just the user's own game(s) for the current week (called from
+  // the Dashboard's "Sim My Game" button) so the player can see their own
+  // box score before the rest of the league's games play out via Advance
+  // Week. Returns the now-played games (with boxscore attached) so the
+  // caller can pop up the result.
+  function simulateMyGamesThisWeek() {
+    var games = myUnplayedGamesThisWeek();
+    if (!games.length || !Sim) return [];
+    games.forEach(function (g) { Sim.simulateAndApply(g); });
+    S.save();
+    return games;
   }
 
   function runOffseasonWeek(season, summary) {
@@ -151,7 +191,7 @@
       var wasChampioned = !!((S.getSeason().playoffs || {})[d.id] || {}).champion;
       if (Playoffs.simulateOneRound(d.id)) anyActive = true;
       var bracket = (S.getSeason().playoffs || {})[d.id];
-      if (bracket && bracket.champion && !wasChampioned && window.PHLInbox) {
+      if (bracket && bracket.champion && !wasChampioned && window.PHLInbox && S.isUserRelevantTeam(bracket.champion)) {
         var champ = S.getTeam(bracket.champion);
         window.PHLInbox.addNotification({
           type: "playoff",
@@ -171,6 +211,25 @@
         entryDraftDoneThisCycle: false,
       });
       summary.push("Playoffs complete — the off-season begins.");
+      // Anyone who grew past their division's overall cutoff during the
+      // season just played gets released to free agency now — see
+      // js/state.js releasePlayersAboveOverallCutoff.
+      var cutReleases = S.releasePlayersAboveOverallCutoff();
+      if (cutReleases.length) {
+        summary.push(cutReleases.length + " player(s) released for exceeding their division's overall cutoff.");
+        if (window.PHLInbox) {
+          cutReleases.forEach(function (r) {
+            if (!S.isUserRelevantTeam(r.teamId)) return;
+            var team = S.getTeam(r.teamId);
+            window.PHLInbox.addNotification({
+              type: "league",
+              title: "Roster cut — overall cutoff",
+              body: r.player.name + " (" + r.player.overall + " OVR) had to be released by " + (team ? team.name : "their team") +
+                " for exceeding the division's overall cutoff.",
+            });
+          });
+        }
+      }
     } else {
       S.updateSeason({ calendarWeek: season.calendarWeek + 1 });
     }
@@ -204,5 +263,7 @@
     weekLabel: weekLabel,
     checkBlocked: checkBlocked,
     advanceWeek: advanceWeek,
+    myUnplayedGamesThisWeek: myUnplayedGamesThisWeek,
+    simulateMyGamesThisWeek: simulateMyGamesThisWeek,
   };
 })();

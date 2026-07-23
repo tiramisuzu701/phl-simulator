@@ -241,6 +241,10 @@
       alert("Roster is full (" + S.getSettings().rosterMax + " players). Release someone first.");
       return;
     }
+    if (mode === "sign" && p.position === "G" && !S.wouldMeetGoalieMax(selectedTeamId, [], [p])) {
+      alert("You already carry " + S.GOALIE_MAX + " goalies — the most a team can hold. Release one first.");
+      return;
+    }
     var space = S.capSpace(selectedTeamId);
     var currentSalary = mode === "resign" ? p.salary : 0;
     var spaceAfterRelease = space + (mode === "resign" ? currentSalary : 0); // re-signing frees up their old cap hit first

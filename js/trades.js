@@ -201,6 +201,14 @@
       alert("That trade would put " + S.getTeam(partnerId).name + " over the " + settings.rosterMax + "-player roster limit — they won't do it.");
       return;
     }
+    if (!S.wouldMeetGoalieMax(myTeamId, view.mine, theirs)) {
+      alert("That trade would leave you with more than " + S.GOALIE_MAX + " goalies — the most a team can hold.");
+      return;
+    }
+    if (!S.wouldMeetGoalieMax(partnerId, view.theirs, mine)) {
+      alert("That trade would leave " + S.getTeam(partnerId).name + " with more than " + S.GOALIE_MAX + " goalies — they won't do it.");
+      return;
+    }
 
     var myCapAfter = S.capForTeam(myTeamId) - (S.capUsed(myTeamId) - sumValue.salary(mine) + sumValue.salary(theirs));
     var partnerCapAfter = S.capForTeam(partnerId) - (S.capUsed(partnerId) - sumValue.salary(theirs) + sumValue.salary(mine));

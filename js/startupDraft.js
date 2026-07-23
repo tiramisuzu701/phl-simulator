@@ -7,16 +7,20 @@
  * js/createSave.js). This module never picks the GM's team itself
  * anymore; it just runs the draft. The real PHL player pool (see
  * startupPool in starterData.js) is drafted in three cascading phases:
- *   1. Pro drafts from the FULL pool (settings.startupDraftRounds, snake).
- *   2. Contender drafts from whatever Pro left behind (same rounds, snake).
- *   3. Prospect drafts from whatever Contender left behind (same rounds).
+ *   1. Pro drafts from the FULL pool (always 6 rounds, snake — see
+ *      roundsForPhase below).
+ *   2. Contender drafts from whatever Pro left behind (settings.
+ *      startupDraftRounds, snake).
+ *   3. Prospect drafts from whatever Contender left behind (same rounds
+ *      as Contender).
  * Anyone still undrafted after Prospect's phase becomes a normal free
  * agent. Pick order for every phase comes from a single random shuffle of
  * all teams (including a freshly added Expansion Franchise, if any), made
  * once when the draft begins — each phase just filters that master order
- * down to its own division's teams. Rounds are 8 for a normal save, or 6
- * for a save that includes an Expansion Franchise (one extra team drawing
- * from the same fixed-size real player pool).
+ * down to its own division's teams. The Pro division always drafts 6
+ * rounds regardless of Expansion mode; Contender/Prospect are 8 rounds
+ * for a normal save, or 6 for a save that includes an Expansion Franchise
+ * (one extra team drawing from the same fixed-size real player pool).
  */
 (function () {
   "use strict";
@@ -57,6 +61,16 @@
     return sd.phaseTeamOrder.length * sd.roundsPerPhase;
   }
 
+  // The Pro division always drafts 6 rounds, regardless of Expansion mode
+  // — it's the real-PHL-caliber pool and doesn't need the extra depth an
+  // Expansion save's Contender/Prospect phases get. Contender and Prospect
+  // both use settings.startupDraftRounds (8 normally, 6 with an Expansion
+  // Franchise — see js/createSave.js).
+  function roundsForPhase(phase) {
+    if (phase === "pro") return 6;
+    return S.getSettings().startupDraftRounds || 8;
+  }
+
   function currentTeamId(sd) {
     if (sd.status !== "active" || !sd.phaseTeamOrder.length) return null;
     var roundIndex = currentRoundIndex(sd);
@@ -84,6 +98,7 @@
     }
     sd.phaseIndex += 1;
     sd.phase = PHASES[sd.phaseIndex];
+    sd.roundsPerPhase = roundsForPhase(sd.phase);
     var divTeamIds = S.getTeams(sd.phase).map(function (t) { return t.id; });
     sd.phaseTeamOrder = sd.masterOrder.filter(function (id) { return divTeamIds.indexOf(id) !== -1; });
     sd.pickIndexInPhase = 0;
@@ -118,10 +133,11 @@
     sd.pickIndexInPhase = 0;
     sd.phase = null;
     sd.phaseTeamOrder = [];
-    // Rounds-per-phase is decided once, at save creation (6 rounds for a
-    // save with an Expansion Franchise, 8 otherwise — see
-    // js/createSave.js), and carried here from settings.
-    sd.roundsPerPhase = S.getSettings().startupDraftRounds || 8;
+    // Rounds-per-phase is now set per-phase in advancePhase() (see
+    // roundsForPhase) — Pro is always 6 rounds, Contender/Prospect follow
+    // settings.startupDraftRounds (8 normally, 6 with an Expansion
+    // Franchise — see js/createSave.js).
+    sd.roundsPerPhase = 0;
     S.updateStartupDraft(sd);
     advancePhase(sd);
   }
@@ -140,6 +156,7 @@
     if (!player || !player.startupDraftPool || player.teamId) return;
     var cap = currentPhaseCap(sd);
     if (cap != null && player.overall > cap) return; // above this phase's division overall cutoff — blocked
+    if (player.position === "G" && !S.wouldMeetGoalieMax(teamId, [], [player])) return; // already at the goalie sub-cap
     S.updatePlayer(playerId, { teamId: teamId, startupDraftPool: false, contractYears: 3 });
     sd.picks.push({
       pickNumber: sd.picks.length + 1,
@@ -199,9 +216,10 @@
     var pool = S.getStartupPool();
     var cap = currentPhaseCap(sd);
     if (cap != null) pool = pool.filter(function (p) { return p.overall <= cap; });
+    var need = teamNeedCounts(teamId);
+    if ((need.G || 0) >= S.GOALIE_MAX) pool = pool.filter(function (p) { return p.position !== "G"; }); // already at the goalie sub-cap
     if (!pool.length) return null;
 
-    var need = teamNeedCounts(teamId);
     var picksSoFar = picksSoFarForTeamThisPhase(sd, teamId);
     var roundsLeft = sd.roundsPerPhase - picksSoFar; // this pick counts as one of them
 
@@ -326,14 +344,15 @@
   function renderReadyScreen(fr) {
     var team = S.getTeam(fr.teamId);
     var div = S.getDivision(fr.divisionId);
-    var rounds = S.getSettings().startupDraftRounds || 8;
+    var otherRounds = S.getSettings().startupDraftRounds || 8;
     var html = '<div class="panel-header"><h2>Startup Draft</h2></div>';
     html += '<div class="form-card">';
     html += "<p>You're GM of <strong>" + U.escapeHtml(team ? team.name : "?") + "</strong> (" + U.escapeHtml(div ? div.name : "?") +
       (team && team.isExpansionTeam ? " &middot; Expansion Franchise" : "") + ").</p>";
-    html += "<p class=\"muted\">The Startup Draft runs in three cascading phases, each " + rounds + " rounds in snake order " +
-      "(pick order reverses every round): <strong>Pro</strong> drafts first from the full real-player pool, " +
-      "then <strong>Contender</strong> drafts from whoever's left, then <strong>Prospect</strong> gets the rest. " +
+    html += "<p class=\"muted\">The Startup Draft runs in three cascading phases in snake order " +
+      "(pick order reverses every round): <strong>Pro</strong> drafts first from the full real-player pool " +
+      "(always 6 rounds), then <strong>Contender</strong> drafts " + otherRounds + " rounds from whoever's left, " +
+      "then <strong>Prospect</strong> gets the rest over " + otherRounds + " rounds. " +
       "Draft order for every phase is randomized once, right when you start. Undrafted players afterward become " +
       "regular free agents.</p>";
     html += '<div class="form-actions">';
@@ -386,6 +405,12 @@
       if (phaseCap != null) {
         html += '<p class="muted small">' + PHASE_LABEL[sd.phase] + " division overall cutoff: " + phaseCap + " or below. Players above that stay in the pool for now (they may go undrafted).</p>";
         pool = pool.filter(function (p) { return p.overall <= phaseCap; });
+      }
+      var myGoalieCount = (S.getRoster(fr.teamId) || []).filter(function (p) { return p.position === "G"; }).length;
+      var goalieCapReached = myGoalieCount >= S.GOALIE_MAX;
+      if (goalieCapReached) {
+        html += '<p class="muted small">You already carry ' + S.GOALIE_MAX + ' goalies — the max per team — so goalies are hidden from your board below.</p>';
+        pool = pool.filter(function (p) { return p.position !== "G"; });
       }
       html += '<table class="data-table"><thead><tr><th>Nametag</th><th>Pos</th><th>Archetype</th><th>OVR</th><th>POT</th><th></th></tr></thead><tbody>';
       pool.forEach(function (p) {

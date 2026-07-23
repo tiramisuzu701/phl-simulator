@@ -14,7 +14,7 @@
   var U = window.PHLUtil;
   var container = null;
 
-  var SCRIMS_PER_WEEK = 2;
+  var SCRIMS_PER_WEEK = 4;
 
   function runScrim(teamId) {
     var team = S.getTeam(teamId);

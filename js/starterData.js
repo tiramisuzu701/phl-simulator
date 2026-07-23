@@ -313,6 +313,26 @@
     { id: "sp_233", name: "HollowIon", position: "F", archetype: "Two-Way Forward", overall: 59, potential: 72, salary: 123500, contractYears: null, teamId: null, startupDraftPool: true, isDraftProspect: false, retired: false, stats: null },
     { id: "sp_234", name: "JunoJolt", position: "F", archetype: "Playmaker", overall: 57, potential: 70, salary: 113000, contractYears: null, teamId: null, startupDraftPool: true, isDraftProspect: false, retired: false, stats: null },
     { id: "sp_235", name: "KarmaKernel", position: "F", archetype: "Goal Scorer", overall: 55, potential: 69, salary: 103000, contractYears: null, teamId: null, startupDraftPool: true, isDraftProspect: false, retired: false, stats: null },
+    // Filler players sp_236-sp_253 — added to give the Startup Draft pool a
+    // little more depth (same schema/salary formula as the rest of the pool).
+    { id: "sp_236", name: "LumenWraith", position: "F", archetype: "Playmaker", overall: 64, potential: 77, salary: 134500, contractYears: null, teamId: null, startupDraftPool: true, isDraftProspect: false, retired: false, stats: null },
+    { id: "sp_237", name: "MirageVolt", position: "F", archetype: "Two-Way Forward", overall: 62, potential: 75, salary: 122000, contractYears: null, teamId: null, startupDraftPool: true, isDraftProspect: false, retired: false, stats: null },
+    { id: "sp_238", name: "NebulaSprint", position: "F", archetype: "Grinder", overall: 58, potential: 68, salary: 93000, contractYears: null, teamId: null, startupDraftPool: true, isDraftProspect: false, retired: false, stats: null },
+    { id: "sp_239", name: "OrbitFlicker", position: "D", archetype: "Two-Way Defenseman", overall: 63, potential: 76, salary: 128000, contractYears: null, teamId: null, startupDraftPool: true, isDraftProspect: false, retired: false, stats: null },
+    { id: "sp_240", name: "PulseWard", position: "D", archetype: "Offensive Defenseman", overall: 60, potential: 73, salary: 109500, contractYears: null, teamId: null, startupDraftPool: true, isDraftProspect: false, retired: false, stats: null },
+    { id: "sp_241", name: "QuartzHollow", position: "D", archetype: "Stay-at-Home Defenseman", overall: 57, potential: 67, salary: 87500, contractYears: null, teamId: null, startupDraftPool: true, isDraftProspect: false, retired: false, stats: null },
+    { id: "sp_242", name: "RiftEmber", position: "D", archetype: "Two-Way Defenseman", overall: 65, potential: 78, salary: 141500, contractYears: null, teamId: null, startupDraftPool: true, isDraftProspect: false, retired: false, stats: null },
+    { id: "sp_243", name: "SolsticeDrift", position: "F", archetype: "Goal Scorer", overall: 66, potential: 79, salary: 148000, contractYears: null, teamId: null, startupDraftPool: true, isDraftProspect: false, retired: false, stats: null },
+    { id: "sp_244", name: "TremorLatch", position: "F", archetype: "Power Forward", overall: 60, potential: 71, salary: 106000, contractYears: null, teamId: null, startupDraftPool: true, isDraftProspect: false, retired: false, stats: null },
+    { id: "sp_245", name: "UmbraCascade", position: "G", archetype: "Butterfly", overall: 64, potential: 77, salary: 134500, contractYears: null, teamId: null, startupDraftPool: true, isDraftProspect: false, retired: false, stats: null },
+    { id: "sp_246", name: "VaporSteel", position: "G", archetype: "Hybrid", overall: 61, potential: 74, salary: 115500, contractYears: null, teamId: null, startupDraftPool: true, isDraftProspect: false, retired: false, stats: null },
+    { id: "sp_247", name: "WhorlBastion", position: "G", archetype: "Standup", overall: 58, potential: 70, salary: 96000, contractYears: null, teamId: null, startupDraftPool: true, isDraftProspect: false, retired: false, stats: null },
+    { id: "sp_248", name: "XenonRelay", position: "G", archetype: "Butterfly", overall: 56, potential: 66, salary: 82000, contractYears: null, teamId: null, startupDraftPool: true, isDraftProspect: false, retired: false, stats: null },
+    { id: "sp_249", name: "YonderPrism", position: "D", archetype: "Offensive Defenseman", overall: 54, potential: 65, salary: 73500, contractYears: null, teamId: null, startupDraftPool: true, isDraftProspect: false, retired: false, stats: null },
+    { id: "sp_250", name: "ZephyrLatch", position: "F", archetype: "Playmaker", overall: 53, potential: 64, salary: 68500, contractYears: null, teamId: null, startupDraftPool: true, isDraftProspect: false, retired: false, stats: null },
+    { id: "sp_251", name: "AshfallVector", position: "F", archetype: "Two-Way Forward", overall: 51, potential: 62, salary: 59500, contractYears: null, teamId: null, startupDraftPool: true, isDraftProspect: false, retired: false, stats: null },
+    { id: "sp_252", name: "BrindleOrbit", position: "D", archetype: "Stay-at-Home Defenseman", overall: 50, potential: 60, salary: 54000, contractYears: null, teamId: null, startupDraftPool: true, isDraftProspect: false, retired: false, stats: null },
+    { id: "sp_253", name: "CinderQuartz", position: "G", archetype: "Hybrid", overall: 52, potential: 63, salary: 64000, contractYears: null, teamId: null, startupDraftPool: true, isDraftProspect: false, retired: false, stats: null },
   ];
 
   // Logo URLs are hotlinked directly from the real PHL's own site,
@@ -358,7 +378,7 @@
       generatedFor: "Puck (Steam)",
     },
     settings: {
-      rosterMax: 14, // max players a team may hold
+      rosterMax: 10, // max players a team may hold (of which at most GOALIE_MAX are goalies — see js/state.js)
       lineup: { F: 2, D: 2, G: 1 }, // active lineup per game (Puck is 2F+2D+1G)
       targetGamesPerTeam: 18, // legacy fallback only — see division.gamesPerWeek
       offseasonWeeks: 5,

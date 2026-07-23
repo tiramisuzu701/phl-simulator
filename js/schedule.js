@@ -213,8 +213,13 @@
     }
 
     var html = '<div class="boxscore">';
+    html += '<div class="boxscore-scoreline">' +
+      '<span class="boxscore-scoreline-team">' + U.crestHtml(away, "crest-md") + U.escapeHtml(away ? away.name : "?") + '</span>' +
+      '<span class="boxscore-scoreline-score">' + g.awayScore + " - " + g.homeScore + (g.wentToOT ? ' <span class="pill pill-warn small">OT</span>' : "") + '</span>' +
+      '<span class="boxscore-scoreline-team">' + U.escapeHtml(home ? home.name : "?") + U.crestHtml(home, "crest-md") + '</span>' +
+      "</div>";
     [{ team: away, id: g.awayTeamId }, { team: home, id: g.homeTeamId }].forEach(function (side) {
-      html += '<div class="boxscore-team"><h5>' + U.escapeHtml(side.team ? side.team.name : "?") + "</h5>";
+      html += '<div class="boxscore-team"><h5>' + U.crestHtml(side.team, "crest-sm") + U.escapeHtml(side.team ? side.team.name : "?") + "</h5>";
       html += '<table class="data-table compact"><thead><tr><th>Skater</th><th>G</th><th>A</th><th>PTS</th><th>+/-</th></tr></thead><tbody>' +
         (teamSkaterRows(side.id) || '<tr><td colspan="5" class="muted small">No skaters recorded.</td></tr>') + "</tbody></table>";
       var goalieRows = teamGoalieRows(side.id);
@@ -273,9 +278,9 @@
         var away = S.getTeam(g.awayTeamId);
         var expanded = view.expandedGameId === g.id;
         html += '<div class="game-row' + (g.played ? "" : " game-upcoming") + '"' + (g.played ? ' data-action="toggle-box" data-id="' + g.id + '" role="button" tabindex="0"' : "") + '>';
-        html += '<span class="game-team">' + U.escapeHtml(away ? away.abbr : "?") + "</span>";
+        html += '<span class="game-team">' + U.crestHtml(away, "crest-sm") + U.escapeHtml(away ? away.abbr : "?") + "</span>";
         html += '<span class="game-score">' + (g.played ? g.awayScore + " - " + g.homeScore + (g.wentToOT ? " OT" : "") : "@") + "</span>";
-        html += '<span class="game-team">' + U.escapeHtml(home ? home.abbr : "?") + "</span>";
+        html += '<span class="game-team">' + U.crestHtml(home, "crest-sm") + U.escapeHtml(home ? home.abbr : "?") + "</span>";
         if (g.played) html += '<span class="muted small boxscore-toggle">' + (expanded ? "Hide box score ▲" : "Box score ▼") + "</span>";
         html += "</div>";
         if (expanded) html += renderBoxscore(g);
@@ -312,10 +317,10 @@
       var home = S.getTeam(g.homeTeamId);
       var away = S.getTeam(g.awayTeamId);
       var involvesMe = g.homeTeamId === myTeamId || g.awayTeamId === myTeamId;
-      html += '<div class="game-row" style="' + (involvesMe ? "border-left:2px solid var(--glow-1);padding-left:0.4rem;" : "") + '">';
-      html += '<span class="game-team">' + U.escapeHtml(away ? away.abbr : "?") + "</span>";
+      html += '<div class="game-row' + (involvesMe ? " game-row-mine" : "") + '">';
+      html += '<span class="game-team">' + U.crestHtml(away, "crest-sm") + U.escapeHtml(away ? away.abbr : "?") + "</span>";
       html += '<span class="game-score">' + g.awayScore + " - " + g.homeScore + (g.wentToOT ? " OT" : "") + "</span>";
-      html += '<span class="game-team">' + U.escapeHtml(home ? home.abbr : "?") + "</span>";
+      html += '<span class="game-team">' + U.crestHtml(home, "crest-sm") + U.escapeHtml(home ? home.abbr : "?") + "</span>";
       html += "</div>";
     });
     html += "</div>";

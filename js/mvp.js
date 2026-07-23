@@ -54,7 +54,7 @@
       var best = pickBest(players, function (p) { return p.stats; });
       if (best) {
         S.addMvpAward({ season: season.seasonNumber, divisionId: div.id, type: "first-half", playerId: best.id, week: season.calendarWeek });
-        if (window.PHLInbox) {
+        if (window.PHLInbox && S.isUserRelevantTeam(best.teamId)) {
           window.PHLInbox.addNotification({
             type: "award",
             title: (S.getDivision(div.id) || {}).name + " First-Half MVP",
@@ -91,7 +91,7 @@
       var best = pickBest(players, function (p) { return diffStats(p.stats, p.statsAtHalf); });
       if (best) {
         S.addMvpAward({ season: season.seasonNumber, divisionId: div.id, type: "second-half", playerId: best.id });
-        if (window.PHLInbox) {
+        if (window.PHLInbox && S.isUserRelevantTeam(best.teamId)) {
           window.PHLInbox.addNotification({
             type: "award",
             title: (S.getDivision(div.id) || {}).name + " Second-Half MVP",
@@ -129,7 +129,7 @@
     var season = S.getSeason();
     S.addMvpAward({ season: season.seasonNumber, divisionId: divisionId, type: "playoff-series", seriesId: series.id, playerId: bestId });
     var p = S.getPlayer(bestId);
-    if (window.PHLInbox && p) {
+    if (window.PHLInbox && p && S.isUserRelevantTeam(p.teamId)) {
       window.PHLInbox.addNotification({
         type: "award",
         title: "Series MVP",
