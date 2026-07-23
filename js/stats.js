@@ -86,6 +86,39 @@
     wireEvents();
   }
 
+  // Growth window: development is strongest from rookie age through
+  // PEAK_YOUNG_AGE, then linearly tapers to zero by declineStartAge. A
+  // player's Potential now actually means something — a high-potential
+  // young player reliably climbs most of the way to their ceiling over a
+  // handful of seasons, not a coin-flip +1 here and there.
+  var PEAK_YOUNG_AGE = 23;
+
+  function developPlayer(p, settings) {
+    var gap = p.potential - p.overall;
+    if (gap <= 0) return; // already maxed out
+
+    var declineAge = settings.declineStartAge;
+    var ageFactor;
+    if (p.age <= PEAK_YOUNG_AGE) {
+      ageFactor = 1; // full development speed through the peak development years
+    } else if (p.age >= declineAge) {
+      ageFactor = 0; // no more room to grow once decline starts
+    } else {
+      ageFactor = 1 - (p.age - PEAK_YOUNG_AGE) / (declineAge - PEAK_YOUNG_AGE);
+    }
+    if (ageFactor <= 0) return;
+
+    // Bigger gaps close faster (up to ~1/3 of what's left per season),
+    // clamped to a sane per-season range so nobody leaps 40 points in a
+    // year, but a wide-open gap still moves meaningfully every season.
+    var maxStep = U.clamp(Math.round(gap * 0.35), 1, 8);
+    var growth = Math.round(maxStep * ageFactor);
+    if (growth <= 0) growth = 1; // any real development window guarantees at least +1
+
+    p.overall = U.clamp(p.overall + growth, p.overall, p.potential);
+    p.attributes = U.deriveAttributes(p.overall, p.position, p.archetype);
+  }
+
   // Ages every active (non-retired, non-prospect) player by a year, applies
   // hidden skill decline/growth, and retires anyone past their randomized
   // retirement age. Returns the list of players who just retired.
@@ -93,7 +126,7 @@
     var settings = S.getSettings();
     var retired = [];
     S.getPlayers().forEach(function (p) {
-      if (p.isDraftProspect || p.retired) return;
+      if (p.isDraftProspect || p.startupDraftPool || p.retired) return;
       p.age = (p.age != null ? p.age : U.generateStartingAge()) + 1;
       if (p.retirementAge == null) p.retirementAge = U.retirementAgeFor();
 
@@ -108,10 +141,8 @@
         var dropAmt = U.randInt(1, 3);
         p.overall = U.clamp(p.overall - dropAmt, 25, 99);
         p.attributes = U.deriveAttributes(p.overall, p.position, p.archetype);
-      } else if (p.overall < p.potential && Math.random() < 0.55) {
-        // Quiet development toward their ceiling while still young.
-        p.overall = U.clamp(p.overall + U.randInt(1, 2), p.overall, p.potential);
-        p.attributes = U.deriveAttributes(p.overall, p.position, p.archetype);
+      } else {
+        developPlayer(p, settings);
       }
 
       if (p.teamId) {

@@ -346,5 +346,9 @@
       roundsPerPhase: 8,
       picks: [], // full log across all phases: {pickNumber, phase, round, teamId, playerId}
     },
+    // Off-season call-ups: a higher-division team may pull a rostered
+    // player up from any strictly-lower-tier division. Automatic, no
+    // negotiation — see js/promotions.js. Full history logged here.
+    promotions: [], // { id, season, fromTeamId, toTeamId, playerId, fee }
   };
 })();

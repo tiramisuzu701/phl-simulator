@@ -157,6 +157,23 @@
     while (!seriesIsDecided(series)) simulateSeriesGame(series);
   }
 
+  // Once every division has crowned a champion, the season is fully done —
+  // flip the season phase to "complete" so offseason-only tools (Entry
+  // Draft, Promotions, Start New Season) know it's safe to act. This
+  // doesn't fire mid-way through — a division still has an active bracket
+  // won't count as complete, so partial playoff progress never triggers it.
+  function checkAllDivisionsComplete() {
+    var divisions = S.getDivisions();
+    var season = S.getSeason();
+    var allDone = divisions.every(function (d) {
+      var bracket = season.playoffs && season.playoffs[d.id];
+      return bracket && bracket.champion;
+    });
+    if (allDone && season.phase !== "complete") {
+      S.updateSeason({ phase: "complete" });
+    }
+  }
+
   function advanceBracket(divisionId) {
     var bracket = S.getSeason().playoffs[divisionId];
     if (!bracket) return;
@@ -183,6 +200,7 @@
 
     if (lastRound.series.length === 1) {
       bracket.champion = lastRound.series[0].winnerId;
+      checkAllDivisionsComplete();
       S.save();
       return;
     }

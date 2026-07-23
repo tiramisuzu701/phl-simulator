@@ -42,9 +42,16 @@ step needed — it's ready as-is.
 - **Hidden age, decline & retirement** — PHL players never disclose an exact
   age (just that they're 16+), so age is never shown in the UI. Internally,
   every player gets a quietly-estimated age; skill starts declining around
-  29, and each player retires at a randomized age in the low-to-mid 30s.
-  Young players below their Potential can also quietly develop upward over
-  time. All of this happens automatically — there's nothing to configure.
+  29, and each player retires at a randomized age in the low-to-mid 30s. All
+  of this happens automatically — there's nothing to configure.
+- **Player growth** — a young player below their Potential develops toward
+  it every season, automatically (not tied to on-ice performance). Growth is
+  fastest through the early-to-mid 20s, tapers off approaching the decline
+  age, and closes bigger Overall-to-Potential gaps faster than small ones —
+  so a high-Potential prospect reliably climbs most of the way to their
+  ceiling over a handful of seasons instead of drifting up a point at a
+  time. Once decline sets in, growth stops and Overall trends back down
+  instead.
 - **Breakout rookies** — each new season, a fresh batch of lower-overall,
   wide-potential rookies enters free agency. They can only be signed by
   Prospect teams (occasionally Contender) at first — never straight to Pro.
@@ -83,6 +90,16 @@ step needed — it's ready as-is.
   per season from the Draft tab, snake order, worst record picks first)
   stocked with freshly generated breakout-rookie prospects. Draft manually
   or auto-draft. Unrelated to the one-time Startup Draft above.
+- **Promotions (off-season call-ups)** — once every division has crowned a
+  champion (season phase flips to "complete"), a manager can permanently
+  call up a rostered player from any strictly lower-tier division onto
+  their own team from the **Promotions** tab. There's no negotiation: a
+  league-set call-up fee (the same Overall/Potential-based valuation used
+  for free-agent asking prices) has to fit in the acquiring team's cap
+  space alongside the player's freshly recalculated salary, or the move is
+  blocked. Every completed call-up is logged in a Promotion History table.
+  This is separate from — and off-season-only, unlike — normal free-agent
+  signings.
 - **Contracts & Cap** — salary cap is set **per division** (Prospect
   $1,000,000/yr, Contender $2,000,000/yr, Pro $4,000,000/yr team budgets),
   reflecting that top-tier orgs have bigger budgets. Sign free agents,
@@ -171,7 +188,12 @@ for the shape, `js/state.js` for the accessors):
   startupDraftPool (true until the Startup Draft assigns them a team),
   eligibleDivisions (breakout-rookie restriction, cleared after first
   signing), stats }`.
-- `season` — `{ seasonNumber, phase, schedule, playoffs }`.
+- `season` — `{ seasonNumber, phase, schedule, playoffs }`. `phase` cycles
+  `"offseason" -> "regular" -> "playoffs" -> "complete"`, then back to
+  `"regular"` once you start a new season. `"complete"` is set
+  automatically the moment every division has crowned a playoff champion
+  (see `checkAllDivisionsComplete()` in `js/playoffs.js`) and is what gates
+  off-season-only tools like Promotions.
 - `draft` — `{ active, year, order, pickIndex, pool, picks }` (the
   recurring annual Entry Draft).
 - `franchise` — `{ divisionId, teamId }`, the GM's chosen team, set once
@@ -179,6 +201,9 @@ for the shape, `js/state.js` for the accessors):
 - `startupDraft` — `{ status, phase, phaseIndex, masterOrder,
   phaseTeamOrder, pickIndexInPhase, roundsPerPhase, picks }`, the one-time
   cascading draft's state (see js/startupDraft.js).
+- `promotions` — array of `{ id, season, fromTeamId, toTeamId, playerId,
+  fee }` log entries, one per completed off-season call-up (see
+  js/promotions.js).
 - `settings` — roster max, active lineup shape, target games per team,
   points for a win/OT loss, playoff teams per division, decline/retirement
   age range, rookies-per-season, rookie/Contender-eligibility odds.

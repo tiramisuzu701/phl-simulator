@@ -16,6 +16,7 @@
     standings: window.PHLStandings,
     playoffs: window.PHLPlayoffs,
     draft: window.PHLDraft,
+    promotions: window.PHLPromotions,
     contracts: window.PHLContracts,
     stats: window.PHLStats,
     data: window.PHLDataTools,

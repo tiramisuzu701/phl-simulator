@@ -46,6 +46,7 @@
     if (!d.divisions) d.divisions = deepClone(starter.divisions);
     if (!d.franchise) d.franchise = deepClone(starter.franchise);
     if (!d.startupDraft) d.startupDraft = deepClone(starter.startupDraft);
+    if (!d.promotions) d.promotions = [];
     for (var key in starter.settings) {
       if (!(key in d.settings)) d.settings[key] = starter.settings[key];
     }
@@ -285,6 +286,17 @@
     save();
   }
 
+  // ---------------- Promotions (off-season inter-division call-ups) ----
+  function getPromotions() {
+    return data.promotions;
+  }
+  function addPromotion(entry) {
+    entry.id = entry.id || U.uid("promo");
+    data.promotions.push(entry);
+    save();
+    return entry;
+  }
+
   // ---------------- Cap helpers ----------------
   // Salary cap is per-division (top divisions have bigger budgets), not a
   // single league-wide number.
@@ -344,5 +356,7 @@
     setFranchise: setFranchise,
     getStartupDraft: getStartupDraft,
     updateStartupDraft: updateStartupDraft,
+    getPromotions: getPromotions,
+    addPromotion: addPromotion,
   };
 })();
