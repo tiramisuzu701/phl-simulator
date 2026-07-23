@@ -8,50 +8,69 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <header class="app-header">
-    <div class="app-header-inner">
-      <div class="brand">
-        <span class="brand-mark">PHL</span>
-        <span class="brand-text">Franchise Simulator <span class="muted">for Puck</span></span>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <span class="sidebar-brand-mark">PHL</span>
+        <span class="sidebar-brand-text">Franchise<br>Simulator</span>
       </div>
-      <div class="header-meta" id="header-meta"></div>
-      <div class="header-advance" id="header-advance"></div>
+
+      <div class="sidebar-franchise" id="sidebar-franchise"></div>
+
+      <div class="sidebar-section-label">Navigation</div>
+      <nav class="sidebar-nav" id="tab-nav">
+        <button class="nav-item" data-tab="dashboard"><span class="nav-icon">&#9673;</span><span>Dashboard</span></button>
+        <button class="nav-item" data-tab="startup"><span class="nav-icon">&#9873;</span><span>Startup Draft</span></button>
+        <button class="nav-item" data-tab="teams"><span class="nav-icon">&#9974;</span><span>Teams</span></button>
+        <button class="nav-item" data-tab="players"><span class="nav-icon">&#9787;</span><span>Players</span></button>
+        <button class="nav-item" data-tab="schedule"><span class="nav-icon">&#128197;</span><span>Schedule</span></button>
+        <button class="nav-item" data-tab="standings"><span class="nav-icon">&#9776;</span><span>Standings</span></button>
+        <button class="nav-item" data-tab="playoffs"><span class="nav-icon">&#127942;</span><span>Playoffs</span></button>
+        <button class="nav-item" data-tab="trades"><span class="nav-icon">&#8646;</span><span>Trades</span></button>
+        <button class="nav-item" data-tab="promotions"><span class="nav-icon">&#8593;</span><span>Promotions</span></button>
+        <button class="nav-item" data-tab="contracts"><span class="nav-icon">&#128181;</span><span>Contracts &amp; Cap</span></button>
+        <button class="nav-item" data-tab="stats"><span class="nav-icon">&#128200;</span><span>Stats &amp; Offseason</span></button>
+        <button class="nav-item" data-tab="data"><span class="nav-icon">&#128451;</span><span>Data Tools</span></button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <button class="btn-sidebar-action" id="btn-save-exit">
+          <span class="nav-icon">&#8617;</span><span>Save Progress</span>
+        </button>
+      </div>
+    </aside>
+
+    <div class="main-area">
+      <header class="top-header">
+        <div class="top-header-title">
+          <div class="top-header-eyebrow">Career Mode</div>
+          <h1 id="top-header-heading">Dashboard</h1>
+        </div>
+        <div class="top-header-stats" id="header-meta"></div>
+        <div class="header-advance" id="header-advance"></div>
+      </header>
+
+      <main class="app-main">
+        <section class="tab-panel" id="tab-dashboard"></section>
+        <section class="tab-panel" id="tab-startup"></section>
+        <section class="tab-panel" id="tab-teams"></section>
+        <section class="tab-panel" id="tab-teamdetail"></section>
+        <section class="tab-panel" id="tab-players"></section>
+        <section class="tab-panel" id="tab-schedule"></section>
+        <section class="tab-panel" id="tab-standings"></section>
+        <section class="tab-panel" id="tab-playoffs"></section>
+        <section class="tab-panel" id="tab-trades"></section>
+        <section class="tab-panel" id="tab-promotions"></section>
+        <section class="tab-panel" id="tab-contracts"></section>
+        <section class="tab-panel" id="tab-stats"></section>
+        <section class="tab-panel" id="tab-data"></section>
+      </main>
+
+      <footer class="app-footer">
+        <p class="muted small">PHL Franchise Simulator &middot; a fan-made, offline sandbox for the <em>Puck</em> community &middot; all data lives in your browser (or in the JSON file you import/export)</p>
+      </footer>
     </div>
-    <nav class="tab-nav" id="tab-nav">
-      <button class="tab-btn" data-tab="dashboard">Dashboard</button>
-      <button class="tab-btn" data-tab="startup">Startup Draft</button>
-      <button class="tab-btn" data-tab="teams">Teams</button>
-      <button class="tab-btn" data-tab="players">Players</button>
-      <button class="tab-btn" data-tab="schedule">Schedule</button>
-      <button class="tab-btn" data-tab="standings">Standings</button>
-      <button class="tab-btn" data-tab="playoffs">Playoffs</button>
-      <button class="tab-btn" data-tab="draft">Draft</button>
-      <button class="tab-btn" data-tab="promotions">Promotions</button>
-      <button class="tab-btn" data-tab="contracts">Contracts</button>
-      <button class="tab-btn" data-tab="stats">Stats &amp; Offseason</button>
-      <button class="tab-btn" data-tab="data">Data Tools</button>
-    </nav>
-  </header>
-
-  <main class="app-main">
-    <section class="tab-panel" id="tab-dashboard"></section>
-    <section class="tab-panel" id="tab-startup"></section>
-    <section class="tab-panel" id="tab-teams"></section>
-    <section class="tab-panel" id="tab-teamdetail"></section>
-    <section class="tab-panel" id="tab-players"></section>
-    <section class="tab-panel" id="tab-schedule"></section>
-    <section class="tab-panel" id="tab-standings"></section>
-    <section class="tab-panel" id="tab-playoffs"></section>
-    <section class="tab-panel" id="tab-draft"></section>
-    <section class="tab-panel" id="tab-promotions"></section>
-    <section class="tab-panel" id="tab-contracts"></section>
-    <section class="tab-panel" id="tab-stats"></section>
-    <section class="tab-panel" id="tab-data"></section>
-  </main>
-
-  <footer class="app-footer">
-    <p class="muted small">PHL Franchise Simulator &middot; a fan-made, offline sandbox for the <em>Puck</em> community &middot; all data lives in your browser (or in the JSON file you import/export)</p>
-  </footer>
+  </div>
 
   <input type="file" id="import-file-input" accept="application/json" style="display:none">
 
@@ -67,12 +86,12 @@
   <script src="js/schedule.js"></script>
   <script src="js/standings.js"></script>
   <script src="js/playoffs.js"></script>
-  <script src="js/draft.js"></script>
   <script src="js/promotions.js"></script>
   <script src="js/contracts.js"></script>
   <script src="js/stats.js"></script>
   <script src="js/aiManager.js"></script>
   <script src="js/expansion.js"></script>
+  <script src="js/trades.js"></script>
   <script src="js/calendar.js"></script>
   <script src="js/teamDetail.js"></script>
   <script src="js/dashboard.js"></script>

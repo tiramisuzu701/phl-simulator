@@ -137,6 +137,14 @@
       return false;
     }
     var fromTeamId = player.teamId;
+    // Defense in depth: an AI-initiated call-up (toTeamId !== the human's
+    // team) must never pull a player off the human GM's own roster — only
+    // the human decides what happens to their own contracts. (The AI
+    // candidate pool is already filtered upstream in aiManager.js; this
+    // guard just makes sure nothing can slip through that path.)
+    if (fromTeamId === S.getFranchise().teamId && toTeamId !== S.getFranchise().teamId) {
+      return false;
+    }
     var fromTeam = S.getTeam(fromTeamId);
     var lowerDivIds = lowerDivisionIds(toTeam.division);
     if (!fromTeam || lowerDivIds.indexOf(fromTeam.division) === -1) {

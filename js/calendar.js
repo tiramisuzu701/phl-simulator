@@ -74,17 +74,9 @@
 
     var weeksTotal = settings().offseasonWeeks || 5;
     if (season.calendarWeek >= weeksTotal) {
-      var Draft = window.PHLDraft;
-      if (Draft) {
-        if (S.getDraft().active) {
-          Draft.autoDraftRemaining();
-          summary.push("Entry Draft auto-completed.");
-        } else if (!season.entryDraftDoneThisCycle) {
-          Draft.startDraft();
-          Draft.autoDraftRemaining();
-          summary.push("Entry Draft auto-completed.");
-        }
-      }
+      // No more recurring Entry Draft — the only draft in a save is the
+      // one-time Startup Draft. New rookies/prospects are generated
+      // straight into free agency below instead (see Stats.generateRookieClass()).
       var Stats = window.PHLStats;
       var retired = Stats ? Stats.ageAndDeclinePlayers() : [];
       var rookies = Stats ? Stats.generateRookieClass() : [];

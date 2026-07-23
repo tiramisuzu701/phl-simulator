@@ -148,6 +148,46 @@
     return pick(FIRST_NAMES) + " " + pick(LAST_NAMES);
   }
 
+  // ---- Esports gamertags (for procedurally-generated rookies/prospects) --
+  // The real baked-in PHL roster (starterData.js) keeps real names — this
+  // pool is only for players the sim invents on its own (breakout rookie
+  // classes, sample rosters), so they read like actual Puck player handles
+  // rather than real-world names.
+  var GAMERTAG_PREFIX = [
+    "Neo", "Void", "Ghost", "Blitz", "Nova", "Zero", "Cyber", "Rogue",
+    "Frost", "Toxic", "Shadow", "Static", "Crimson", "Obsidian", "Quantum",
+    "Phantom", "Feral", "Glitch", "Savage", "Arctic", "Radiant", "Vortex",
+    "Apex", "Turbo", "Sly", "Grim", "Iron", "Solar", "Lunar", "Venom",
+    "Cryo", "Hex", "Nitro", "Onyx", "Pixel", "Vapor", "Wired", "Ashen",
+    "Dusk", "Ember", "Fable", "Glacial", "Hollow", "Juno", "Karma",
+    "Lucid", "Molten", "Night", "Omega", "Pulse", "Rift", "Steel",
+  ];
+  var GAMERTAG_SUFFIX = [
+    "Wolf", "Hawk", "Reaper", "Fox", "Viper", "Phoenix", "Blade", "Storm",
+    "Ronin", "Ninja", "Specter", "Falcon", "Panther", "Cobra", "Dagger",
+    "Havoc", "Nomad", "Wraith", "Yeti", "Comet", "Bandit", "Rocket",
+    "Pulse", "Drift", "Fang", "Crash", "Bolt", "Talon", "Reaver", "Scope",
+    "Vandal", "Jinx", "Menace", "Byte", "Circuit", "Dagger", "Echo",
+    "Flux", "Gambit", "Hex", "Ion", "Jolt", "Kernel", "Lynx", "Mirage",
+    "Nexus", "Orbit", "Prowl", "Quake", "Reflex",
+  ];
+
+  function randomGamertag() {
+    var prefix = pick(GAMERTAG_PREFIX);
+    var suffix = pick(GAMERTAG_SUFFIX);
+    // Avoid an accidental doubled word (a handful of words appear in both
+    // lists), which would otherwise produce something like "HexHex".
+    while (suffix === prefix) suffix = pick(GAMERTAG_SUFFIX);
+    var base = prefix + suffix;
+    var roll = Math.random();
+    if (roll < 0.35) {
+      base += String(randInt(1, 99));
+    } else if (roll < 0.48) {
+      base = "xX" + base + "Xx";
+    }
+    return base;
+  }
+
   // ---- Archetypes (playstyle) ----------------------------------------
   // Each archetype nudges the hidden offense/defense/goaltending attributes
   // that actually drive the simulation, so picking one has a real effect
@@ -224,6 +264,67 @@
     return "$" + Math.round(n).toLocaleString("en-US");
   }
 
+  // ---- Performance-aware contract pricing -----------------------------
+  // How a player's ACTUAL play this season (not just their static
+  // Overall/Potential) nudges their asking price up or down. Needs at
+  // least a handful of games to matter — small samples fall back to the
+  // Overall/Potential baseline (factor 1).
+  function performanceFactor(player) {
+    var stats = player.stats;
+    if (!stats || !stats.gp || stats.gp < 3) return 1;
+    var overall = player.overall || 60;
+    if (player.position === "G") {
+      var expectedSv = 0.85 + clamp((overall - 40) / 59, 0, 1) * 0.09;
+      var diff = (stats.svPct || 0) - expectedSv;
+      return clamp(1 + diff * 6, 0.7, 1.4);
+    }
+    var ppg = stats.pts / stats.gp;
+    var expectedPpg = 0.15 + clamp((overall - 40) / 59, 0, 1) * 1.1;
+    var ratio = ppg / Math.max(expectedPpg, 0.05);
+    var factor = 1 + (ratio - 1) * 0.5;
+    factor += clamp((stats.plusMinus || 0) / stats.gp, -1, 1) * 0.03;
+    return clamp(factor, 0.7, 1.4);
+  }
+
+  // Higher-tier divisions command bigger price tags for the same
+  // Overall/Potential/performance — mirrors the bigger per-division salary
+  // caps (see starterData.js). Tier 1 (Prospect) ~0.85x, tier 3 (Pro) ~1.09x.
+  function divisionTierFactor(tier) {
+    if (tier == null) return 1;
+    return clamp(0.85 + 0.12 * (tier - 1), 0.7, 1.5);
+  }
+
+  // A player's asking price to re-sign (or to sign as a free agent): the
+  // Overall/Potential baseline, adjusted for how they've actually performed
+  // this season and which division's paying. Allowed to run a bit above the
+  // normal salary ceiling for a bona fide breakout performance.
+  function contractAskingPrice(player, divisionTier) {
+    var base = salaryAsking(player.overall, player.potential);
+    var price = base * performanceFactor(player) * divisionTierFactor(divisionTier);
+    price = clamp(price, SALARY_MIN, SALARY_MAX * 1.6);
+    return Math.round(price / 500) * 500;
+  }
+
+  // Chance (0-1) a player turns down a contract offer. Offers at/above
+  // asking price are almost always accepted; offers below it get riskier
+  // the further short they fall. Contract length nudges it further: a long
+  // deal at a discount reads as an insult (more likely rejected), while a
+  // long deal at a fair-or-better price reads as security (slightly more
+  // likely accepted).
+  function contractRejectChance(askingPrice, offerSalary, years) {
+    var chance;
+    if (offerSalary >= askingPrice) {
+      var over = (askingPrice > 0) ? (offerSalary - askingPrice) / askingPrice : 0;
+      chance = clamp(0.06 - over * 0.15, 0.01, 0.06);
+      chance -= (years - 3) * 0.015;
+    } else {
+      var shortfall = (askingPrice > 0) ? (askingPrice - offerSalary) / askingPrice : 1;
+      chance = clamp(0.08 + shortfall * 1.1, 0.08, 0.92);
+      chance += (years - 3) * 0.03;
+    }
+    return clamp(chance, 0.01, 0.95);
+  }
+
   // ---- Hidden age / decline / retirement ------------------------------
   // Ages are never shown in the UI (PHL only requires players to confirm
   // they're 16+); they exist purely to drive a quiet skill curve.
@@ -268,6 +369,7 @@
     downloadJSON: downloadJSON,
     escapeHtml: escapeHtml,
     randomName: randomName,
+    randomGamertag: randomGamertag,
     ARCHETYPES: ARCHETYPES,
     archetypesFor: archetypesFor,
     randomArchetype: randomArchetype,
@@ -275,6 +377,10 @@
     deriveAttributes: deriveAttributes,
     salaryAsking: salaryAsking,
     formatMoney: formatMoney,
+    performanceFactor: performanceFactor,
+    divisionTierFactor: divisionTierFactor,
+    contractAskingPrice: contractAskingPrice,
+    contractRejectChance: contractRejectChance,
     SALARY_MIN: SALARY_MIN,
     SALARY_MAX: SALARY_MAX,
     generateStartingAge: generateStartingAge,

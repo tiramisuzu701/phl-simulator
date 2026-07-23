@@ -55,9 +55,18 @@ step needed — it's ready as-is.
   time. Once decline sets in, growth stops and Overall trends back down
   instead.
 - **Breakout rookies** — each new season, a fresh batch of lower-overall,
-  wide-potential rookies enters free agency. They can only be signed by
-  Prospect teams (occasionally Contender) at first — never straight to Pro.
-  Once signed once, that restriction is gone for future free agency.
+  wide-potential rookies enters free agency directly (no draft — see
+  below). They can only be signed by Prospect teams (occasionally
+  Contender) at first — never straight to Pro. Once signed once, that
+  restriction is gone for future free agency. Procedurally generated
+  rookies and prospects use esports-style gamertags (e.g. `NeoFalcon`,
+  `xXFrostReaperXx`) rather than real-person names, matching the real PHL
+  roster's own naming convention — see **The real PHL player pool** below.
+- **Only one draft per save** — the sole draft in a save is the one-time
+  **Startup Draft** (see below). There's no recurring annual entry draft
+  anymore; every new rookie class generated during the off-season lands
+  straight in free agency instead, first-come-first-served for any team
+  (subject to the Prospect/Contender-only breakout restriction above).
 - **One button runs the whole season — "Advance Week"** — there's no more
   clicking separate "simulate," "start playoffs," or "start new season"
   buttons. A single **Advance Week** button lives in the top-right header at
@@ -82,9 +91,12 @@ step needed — it's ready as-is.
   top 6 a bye while seeds 7-10 play a Wild Card round for the final 2
   bracket spots (mirroring the 8-team bracket size). A team that finishes
   outside a division's playoff line — including a freshly added expansion
-  team — just misses the playoffs, no special-casing needed. Playoffs run
-  one round per Advance Week click; divisions with shorter brackets simply
-  sit idle (already crowned) while longer brackets keep playing.
+  team — just misses the playoffs, no special-casing needed. It's a real
+  tournament-bracket view: **Sim Game** resolves one game in a series,
+  **Sim Series** finishes that matchup outright, or just hit **Advance
+  Week** to simulate the whole current round for you — mix and match
+  freely, since Advance Week only fills in whatever a round's series
+  haven't already decided on their own.
 - **Startup Draft** — a one-time draft at the start of every save. Pick
   the division and team you want to GM, then the real PHL player pool
   (baked into the site — see below) is drafted in three cascading phases:
@@ -102,13 +114,6 @@ step needed — it's ready as-is.
   real player pool has a fixed number of players, it can run out before
   every team completes all 8 rounds, especially deep into the Prospect
   phase — teams just end up with whatever roster size the pool allowed.
-- **Entry Draft** — a separate, *recurring* league-wide draft (snake order,
-  worst record picks first) stocked with freshly generated breakout-rookie
-  prospects. It's available any time during the 5-week off-season — run it
-  manually (whole or auto-draft) whenever you like. If you never get to it,
-  it auto-completes (fully auto-drafted) right before the regular season
-  starts, so the league is never left without a draft class. Unrelated to
-  the one-time Startup Draft above.
 - **Promotions (off-season call-ups)** — during the off-season, a manager
   can permanently call up a rostered player from any strictly lower-tier
   division onto their own team from the **Promotions** tab. There's no
@@ -117,19 +122,37 @@ step needed — it's ready as-is.
   team's cap space alongside the player's freshly recalculated salary, or
   the move is blocked. Every completed call-up is logged in a Promotion
   History table. This is separate from — and off-season-only, unlike —
-  normal free-agent signings. The AI runs its own promotions too — see
-  **AI proactivity** below.
+  normal free-agent signings. The AI runs its own promotions too (see
+  **AI proactivity** below) — and it can never call up a player off *your*
+  roster, even if your team happens to sit in a division below an AI
+  team's.
+- **Trades** — propose a player-for-player trade with any other team from
+  the **Trades** tab: pick a partner, check off who's coming from each
+  side, and propose. Every player shows a transparent **trade value**
+  (Overall + unrealized Potential, minus salary drag, plus years of
+  contractual control) so it's clear going in whether an offer is
+  reasonable. The other team's side is evaluated automatically — it won't
+  accept giving up meaningfully more value than it receives — and a trade
+  that would leave either side over the roster limit or the salary cap
+  can't be proposed at all. Every completed trade is logged in a Trade
+  History table.
 - **Contracts & Cap** — salary cap is set **per division** (Prospect
   $1,000,000/yr, Contender $2,000,000/yr, Pro $4,000,000/yr team budgets),
-  reflecting that top-tier orgs have bigger budgets. Sign free agents,
-  release players, re-sign expiring contracts. Free-agent salaries are
-  realistic esports-style figures — a $20,000/yr baseline up to $400,000/yr
-  for elite prospects, based on Overall + Potential. **Cap enforcement**: if
-  your own team is over its division's cap, **Advance Week is blocked**
-  with a banner explaining exactly how far over you are — fix it yourself
-  in Contracts (release or trade a player) before you can continue. AI
-  teams that go over cap are fixed automatically and silently (lowest-rated
-  players released first) so the league never gets stuck on their account.
+  reflecting that top-tier orgs have bigger budgets. Every player has an
+  **asking price** — Overall/Potential, adjusted for how they've actually
+  performed *this season* and which division's paying — shown right in the
+  Contracts tab for both your roster and the free-agent pool. Signing or
+  re-signing opens a negotiation panel: pick a **contract length from 1 to
+  5 years** and an offer amount. Offer at or above asking and it's almost
+  always accepted; lowball it and there's a real, visible **chance the
+  player turns you down** (a long deal at a steep discount is the riskiest
+  combination) — a rejected offer changes nothing, so just try again with
+  better terms. **Cap enforcement**: if your own team is over its
+  division's cap, **Advance Week is blocked** with a banner explaining
+  exactly how far over you are — fix it yourself in Contracts (release or
+  trade a player) before you can continue. AI teams that go over cap are
+  fixed automatically and silently (lowest-rated players released first)
+  so the league never gets stuck on their account.
 - **Stats leaderboards** — league leaders in Points, Goals, Assists, +/-,
   SV%, and GAA.
 - **Data Tools** — export your whole league as a JSON file (for backup or
@@ -142,20 +165,22 @@ The whole season runs on one clock, advanced one week at a time by the
 **Advance Week** button in the header. Every season follows the same
 21-week cycle:
 
-1. **5-week off-season** — freeform. All off-season tools (Entry Draft,
-   free agency, Promotions) are open across all 5 weeks, in any order you
-   like. If the Entry Draft hasn't been run manually by the end of week 5,
-   it auto-completes. AI teams sign free agents and run promotions every
-   off-season week. The regular-season schedule is generated right at the
-   end of week 5.
+1. **5-week off-season** — freeform. Free agency, Contracts, Trades, and
+   Promotions are all open across every one of the 5 weeks, in any order
+   you like. AI teams sign free agents and run promotions every off-season
+   week. A new breakout-rookie class joins free agency and the
+   regular-season schedule is generated right at the end of week 5.
 2. **12-week regular season** — **Pro** plays 2 games/week (24 games total);
    **Contender** and **Prospect** play 3 games/week (36 games total each).
    Every team lands on that exact game count.
-3. **Up to 4 weeks of playoffs** — one bracket round resolves per division
-   per week. **Pro**'s 2-round bracket wraps up in 2 weeks; **Contender**'s
-   3-round bracket in 3; **Prospect**'s 4-round bracket (including its
-   Wild Card round) uses the full 4 weeks. Shorter brackets simply idle,
-   already-crowned, until every division has a champion.
+3. **Up to 4 weeks of playoffs** — a bracket round resolves per division
+   per week by default, but you're not stuck waiting on the calendar: play
+   through the current round yourself with Sim Game/Sim Series (see
+   **Playoffs** above) as fast as you want, and Advance Week just picks up
+   whatever's left. **Pro**'s 2-round bracket wraps up in 2 weeks (at
+   most); **Contender**'s 3-round bracket in 3; **Prospect**'s 4-round
+   bracket (including its Wild Card round) uses up to 4. Shorter brackets
+   simply idle, already-crowned, until every division has a champion.
 4. Back to a fresh 5-week off-season — ages/declines/retires players,
    generates a new breakout-rookie class, and repeats indefinitely.
 
@@ -167,10 +192,10 @@ Draft is currently active, or your own team is over the salary cap.
 
 This site ships with the real PHL Season 4 player pool baked in (192
 players pulled from every division's live rosters — including
-inactive/limited/benched players — rated from their actual stats). Nobody
-starts on a team; they all seed the **Startup Draft** described above.
-Replace or add to `startupPool` in `js/starterData.js` any time the real
-rosters change.
+inactive/limited/benched players — rated from their actual stats, using
+their real in-game gamertags). Nobody starts on a team; they all seed the
+**Startup Draft** described above. Replace or add to `startupPool` in
+`js/starterData.js` any time the real rosters change.
 
 ## Adding your own teams & players
 
@@ -224,10 +249,25 @@ every off-season week — no manager input required. Each AI team first
 fills any hole below its minimum lineup requirements, then spends
 remaining cap space on affordable depth/upgrades (capped at a handful of
 moves per team per week so one team doesn't hoover up the whole free-agent
-pool in one tick). Promotions follow the same call-up rules a human
-manager would use (a clear upgrade — +3 Overall or more over the weakest
-player at that position — that the team can actually afford), and each AI
-team attempts at most one call-up per week.
+pool in one tick). Contract offers go through the same asking-price and
+reject-chance system a human negotiation does — an AI signing isn't a sure
+thing just because it's automatic, though the AI always offers a fair
+price rather than lowballing. Promotions follow the same call-up rules a
+human manager would use (a clear upgrade — +3 Overall or more over the
+weakest player at that position — that the team can actually afford), and
+each AI team attempts at most one call-up per week. Crucially, the AI's
+candidate pool for promotions always excludes your own roster — no AI team
+can call up a player away from the team you manage, even if your team sits
+in a division below theirs.
+
+## Interface
+
+The app is a persistent left sidebar (your franchise crest, GM info, and
+every tab) plus a header bar with at-a-glance stat pills (season, phase,
+week, teams, your cap space) and the Advance Week button, always in the
+same place regardless of which tab you're on. On narrow screens the
+sidebar collapses into a horizontally-scrolling top bar so everything
+still fits on mobile.
 
 For a real, full-league database (hundreds of players), typing them in one
 at a time through the web form is slow. The easiest path is the
@@ -278,17 +318,15 @@ for the shape, `js/state.js` for the accessors):
   startupDraftPool (true until the Startup Draft assigns them a team),
   eligibleDivisions (breakout-rookie restriction, cleared after first
   signing), stats }`.
-- `season` — `{ seasonNumber, phase, calendarWeek, schedule, playoffs,
-  entryDraftDoneThisCycle }`. `phase` cycles `"offseason" -> "regular" ->
-  "playoffs"`, then back to `"offseason"` — driven entirely by
-  `js/calendar.js`'s `advanceWeek()`, the single state machine behind the
-  header's Advance Week button. `calendarWeek` is 1-based *within* the
-  current phase (resets to 1 at each phase transition); `seasonNumber`
-  increments at the playoffs -> offseason transition.
-  `entryDraftDoneThisCycle` tracks whether this off-season's Entry Draft
-  has been run yet (manually or auto-completed).
-- `draft` — `{ active, year, order, pickIndex, pool, picks }` (the
-  recurring annual Entry Draft).
+- `season` — `{ seasonNumber, phase, calendarWeek, schedule, playoffs }`.
+  `phase` cycles `"offseason" -> "regular" -> "playoffs"`, then back to
+  `"offseason"` — driven entirely by `js/calendar.js`'s `advanceWeek()`,
+  the single state machine behind the header's Advance Week button.
+  `calendarWeek` is 1-based *within* the current phase (resets to 1 at
+  each phase transition); `seasonNumber` increments at the playoffs ->
+  offseason transition. (Older saves may still carry a now-unused
+  `entryDraftDoneThisCycle` flag from before the recurring Entry Draft was
+  removed — harmless, safe to ignore.)
 - `franchise` — `{ divisionId, teamId }`, the one team the human is
   currently GM of. Set via the Startup Draft tab initially; can change
   later if an Expansion Franchise is created (see above), which always
@@ -303,6 +341,8 @@ for the shape, `js/state.js` for the accessors):
   fee }` log entries, one per completed off-season call-up (both
   human-initiated and AI-initiated — see js/promotions.js and
   js/aiManager.js).
+- `trades` — array of `{ id, season, teamAId, teamBId, playersToA,
+  playersToB }` log entries, one per completed trade (see js/trades.js).
 - `settings` — roster max, active lineup shape, off-season/regular-season
   week counts, per-division games-per-week, startup/expansion draft round
   counts, points for a win/OT loss, playoff teams per division,

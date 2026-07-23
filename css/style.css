@@ -14,6 +14,9 @@
   --border: rgba(11, 11, 11, 0.10);
   --baseline: #c3c2b7;
 
+  --sidebar-bg: #14141a;
+  --sidebar-border: rgba(0, 0, 0, 0.08);
+
   --series-blue: #2a78d6;
   --series-orange: #eb6834;
   --series-aqua: #1baf7a;
@@ -57,6 +60,9 @@
     --warning: #fab219;
     --serious: #ec835a;
     --critical: #e66767;
+
+    --sidebar-bg: #0a0a0c;
+    --sidebar-border: rgba(255, 255, 255, 0.08);
   }
 }
 
@@ -74,32 +80,177 @@ body {
 .small { font-size: 0.85rem; }
 em { color: var(--text-secondary); font-style: normal; }
 
-/* ---------- Header / nav ---------- */
-.app-header {
+/* ---------- App shell: sidebar + main area ---------- */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  align-items: stretch;
+}
+
+/* ---------- Sidebar ---------- */
+.sidebar {
+  width: 232px;
+  flex: 0 0 232px;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
+  display: flex;
+  flex-direction: column;
+  padding: 1.1rem 0.9rem;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  color: #f2f2f0;
+}
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.2rem 0.4rem 1rem;
+}
+.sidebar-brand-mark {
+  background: var(--series-blue);
+  color: white;
+  font-weight: 700;
+  padding: 0.35rem 0.55rem;
+  border-radius: 8px;
+  letter-spacing: 0.03em;
+  font-size: 0.9rem;
+}
+.sidebar-brand-text {
+  font-weight: 600;
+  font-size: 0.8rem;
+  line-height: 1.15;
+  color: #f2f2f0;
+}
+
+.sidebar-franchise {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius);
+  padding: 0.85rem 0.75rem;
+  margin-bottom: 1.1rem;
+  text-align: center;
+}
+.sidebar-team-badge {
+  width: 42px;
+  height: 42px;
+  margin: 0 auto 0.5rem;
+  border-radius: 10px;
+  background: var(--accent, var(--series-blue));
+  color: white;
+  font-weight: 700;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sidebar-team-name { font-weight: 600; font-size: 0.88rem; color: #fff; }
+.sidebar-team-sub { font-size: 0.72rem; color: #9a9a9e; margin-top: 0.15rem; }
+.sidebar-franchise-empty { padding: 0.2rem; line-height: 1.4; }
+
+.sidebar-section-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #75757c;
+  padding: 0 0.4rem 0.4rem;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  flex: 1;
+  overflow-y: auto;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  font-size: 0.85rem;
+  color: #c7c7cc;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+.nav-item:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+.nav-item-active {
+  background: color-mix(in srgb, var(--series-blue) 22%, transparent);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--series-blue);
+}
+.nav-icon { font-size: 0.95rem; width: 1.1rem; text-align: center; flex: 0 0 auto; }
+
+.sidebar-bottom { padding-top: 0.75rem; margin-top: 0.5rem; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.btn-sidebar-action {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 0.55rem 0.65rem;
+  font-size: 0.82rem;
+  color: #c7c7cc;
+  cursor: pointer;
+}
+.btn-sidebar-action:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+
+/* ---------- Main area ---------- */
+.main-area {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.top-header {
   background: var(--surface-1);
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 10;
-}
-.app-header-inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.85rem 1.25rem 0.4rem;
-  gap: 1rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.9rem 1.4rem;
 }
-.brand { display: flex; align-items: baseline; gap: 0.6rem; }
-.brand-mark {
-  background: var(--series-blue);
-  color: white;
-  font-weight: 700;
-  padding: 0.2rem 0.5rem;
-  border-radius: 6px;
-  letter-spacing: 0.03em;
+.top-header-title { min-width: 160px; }
+.top-header-eyebrow {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 0.1rem;
 }
-.brand-text { font-weight: 600; font-size: 1.05rem; }
-.header-meta { color: var(--text-muted); font-size: 0.85rem; }
+.top-header-title h1 { margin: 0; font-size: 1.2rem; }
+
+.top-header-stats { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.stat-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.05rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.3rem 0.65rem;
+  min-width: 64px;
+}
+.stat-pill-label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.stat-pill-value { font-size: 0.85rem; font-weight: 700; }
+.stat-pill-warn { border-color: var(--critical); }
+.stat-pill-warn .stat-pill-value { color: var(--critical); }
+
 .header-advance { display: flex; align-items: center; gap: 0.6rem; }
 .week-pill {
   background: var(--surface-2);
@@ -117,34 +268,11 @@ em { color: var(--text-secondary); font-style: normal; }
   margin-top: 0;
 }
 
-.tab-nav {
-  display: flex;
-  gap: 0.25rem;
-  padding: 0 1rem;
-  overflow-x: auto;
-}
-.tab-btn {
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  padding: 0.6rem 0.75rem;
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.tab-btn:hover { color: var(--text-primary); }
-.tab-btn-active {
-  color: var(--text-primary);
-  border-bottom-color: var(--series-blue);
-  font-weight: 600;
-}
-
 /* ---------- Layout ---------- */
 .app-main {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 1.25rem;
+  max-width: 1200px;
+  padding: 1.25rem 1.4rem;
+  width: 100%;
 }
 .tab-panel { display: none; }
 .tab-panel-active { display: block; }
@@ -452,7 +580,65 @@ input, select {
 }
 .mini-standings li:last-child { border-bottom: none; }
 
+/* ---------- Contract offer panel ---------- */
+.offer-row td { padding: 0; border-bottom: 1px solid var(--gridline); }
+.offer-panel {
+  background: var(--surface-2);
+  padding: 0.85rem 1rem;
+}
+.offer-panel-title { font-weight: 600; margin-bottom: 0.5rem; }
+.offer-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+  margin-bottom: 0.5rem;
+}
+.offer-panel-info { display: flex; flex-direction: column; gap: 0.3rem; }
+
+/* ---------- Trades ---------- */
+.trade-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.trade-column h3 { margin-top: 0; }
+.trade-summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.3rem 0;
+  border-bottom: 1px dashed var(--gridline);
+}
+.trade-summary-row:last-of-type { border-bottom: none; }
+
+@media (max-width: 900px) {
+  .app-shell { flex-direction: column; }
+  .sidebar {
+    width: 100%;
+    flex: 0 0 auto;
+    height: auto;
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    padding: 0.6rem 0.75rem;
+    overflow-x: auto;
+    gap: 0.75rem;
+  }
+  .sidebar-brand { padding: 0; }
+  .sidebar-brand-text { display: none; }
+  .sidebar-franchise { margin-bottom: 0; padding: 0.4rem 0.6rem; white-space: nowrap; }
+  .sidebar-team-badge { width: 30px; height: 30px; margin: 0; }
+  .sidebar-section-label { display: none; }
+  .sidebar-nav { flex-direction: row; overflow-x: auto; flex: 0 0 auto; }
+  .nav-item span:last-child { display: none; }
+  .nav-item { padding: 0.5rem; }
+  .sidebar-bottom { border-top: none; padding-top: 0; margin-top: 0; }
+  .btn-sidebar-action span:last-child { display: none; }
+  .btn-sidebar-action { width: auto; padding: 0.5rem; }
+}
+
 @media (max-width: 640px) {
-  .app-header-inner { flex-direction: column; align-items: flex-start; gap: 0.3rem; }
+  .top-header { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
   .form-grid { grid-template-columns: 1fr; }
 }

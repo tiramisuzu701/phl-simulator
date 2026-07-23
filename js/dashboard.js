@@ -70,6 +70,7 @@
     html += '<button class="btn" data-goto="standings">View Standings</button>';
     html += '<button class="btn" data-goto="playoffs">Playoffs</button>';
     html += '<button class="btn" data-goto="contracts">Contracts</button>';
+    html += '<button class="btn" data-goto="trades">Trades</button>';
     html += '<button class="btn" data-goto="promotions">Promotions</button>';
     html += '<button class="btn" data-goto="teams">Teams &amp; Expansion</button>';
     html += '<button class="btn" data-goto="data">Export / Import League</button>';

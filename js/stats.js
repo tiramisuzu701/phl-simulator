@@ -178,7 +178,7 @@
         : ["prospect"];
       var rookieAge = U.generateRookieAge();
       var player = {
-        name: U.randomName(),
+        name: U.randomGamertag(),
         position: position,
         archetype: archetype,
         overall: overall,

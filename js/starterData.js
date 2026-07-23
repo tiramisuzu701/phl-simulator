@@ -365,6 +365,9 @@
     // player up from any strictly-lower-tier division. Automatic, no
     // negotiation — see js/promotions.js. Full history logged here.
     promotions: [], // { id, season, fromTeamId, toTeamId, playerId, fee }
+    // Player-for-player trades between two teams, initiated from the
+    // Trades tab (see js/trades.js). Full history logged here.
+    trades: [], // { id, season, teamAId, teamBId, playersToA, playersToB }
     // A solo, single-team draft run whenever an Expansion Franchise is
     // added mid-save (see js/expansion.js) — 6 rounds (vs. the Startup
     // Draft's 8) picking from the current free-agent pool to build that

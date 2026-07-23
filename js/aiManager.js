@@ -33,6 +33,7 @@
     var lineup = settings.lineup || { F: 2, D: 2, G: 1 };
     var signed = [];
     aiTeams().forEach(function (team) {
+      var division = S.getDivision(team.division);
       var guard = 0;
       while (guard < 4) {
         guard++;
@@ -46,14 +47,22 @@
 
         var candidates = S.getFreeAgents().filter(function (p) {
           if (!isEligible(p, team.division)) return false;
-          if (p.salary > space) return false;
+          var asking = U.contractAskingPrice(p, division ? division.tier : null);
+          if (asking > space) return false;
           return neededPos ? p.position === neededPos : counts[p.position] < 4; // depth cap when no urgent need
         });
         if (!candidates.length) break;
         candidates.sort(function (a, b) { return b.overall - a.overall; });
         var top = candidates.slice(0, Math.min(3, candidates.length));
         var pick = U.pick(top);
-        S.updatePlayer(pick.id, { teamId: team.id, contractYears: pick.contractYears || 2, eligibleDivisions: null });
+        // Offer right at asking price (AI teams don't lowball), with a
+        // length weighted toward the middle of the 1-5yr range. Same
+        // reject-chance dice every human offer rolls against — an AI
+        // signing isn't guaranteed just because it's automatic.
+        var years = U.randInt(2, 4);
+        var asking = U.contractAskingPrice(pick, division ? division.tier : null);
+        if (Math.random() < U.contractRejectChance(asking, asking, years)) break; // rare, but a player can still say no
+        S.updatePlayer(pick.id, { teamId: team.id, contractYears: years, salary: asking, eligibleDivisions: null });
         signed.push({ teamId: team.id, playerId: pick.id });
       }
     });
@@ -68,11 +77,18 @@
   function aiRunPromotions() {
     var P = window.PHLPromotions;
     if (!P || !P.isOffseasonWindow()) return [];
+    var franchiseTeamId = (S.getFranchise() || {}).teamId;
     var done = [];
     aiTeams().forEach(function (team) {
       var roster = S.getRoster(team.id);
       if (roster.length >= S.getSettings().rosterMax) return;
-      var pool = P.eligiblePlayers(team.id).slice().sort(function (a, b) { return b.overall - a.overall; });
+      // Never poach a player off the human GM's own roster — the AI is only
+      // allowed to touch its own teams' contracts. See eligiblePlayers() in
+      // promotions.js, which otherwise has no concept of "whose team is
+      // this" — it only checks division tier.
+      var pool = P.eligiblePlayers(team.id)
+        .filter(function (p) { return p.teamId !== franchiseTeamId; })
+        .sort(function (a, b) { return b.overall - a.overall; });
       if (!pool.length) return;
       var candidate = pool[0];
       var space = S.capSpace(team.id);

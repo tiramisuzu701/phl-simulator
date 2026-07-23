@@ -311,15 +311,18 @@
       var champ = S.getTeam(bracket.champion);
       html += '<div class="champion-banner">&#127942; <strong>' + U.escapeHtml(champ ? champ.name : "?") + "</strong> is the " + U.escapeHtml(S.getDivision(div).name) + " Division Champion!</div>";
     } else {
-      html += '<p class="muted small">One round resolves per Advance Week — keep hitting the button up top to move the bracket forward.</p>';
+      html += '<p class="muted small">Play out the current round yourself — Sim Game resolves one game, Sim Series finishes that matchup — or just hit Advance Week up top to simulate the whole round for you.</p>';
     }
 
+    var currentRound = bracket.rounds[bracket.rounds.length - 1];
     bracket.rounds.forEach(function (round) {
-      html += '<div class="playoff-round"><h4>' + U.escapeHtml(round.name) + "</h4>";
+      var isCurrent = round === currentRound && !bracket.champion;
+      html += '<div class="playoff-round"><h4>' + U.escapeHtml(round.name) + (isCurrent ? ' <span class="pill pill-accent">In Progress</span>' : "") + "</h4>";
       html += '<div class="series-grid">';
       round.series.forEach(function (series) {
         var teamA = S.getTeam(series.teamAId);
         var teamB = S.getTeam(series.teamBId);
+        var decided = seriesIsDecided(series);
         html += '<div class="series-card">';
         html += '<div class="series-row"><span>(' + series.seedA + ") " + U.escapeHtml(teamA ? teamA.name : "?") + '</span><span class="series-wins">' + series.winsA + "</span></div>";
         html += '<div class="series-row"><span>(' + series.seedB + ") " + U.escapeHtml(teamB ? teamB.name : "?") + '</span><span class="series-wins">' + series.winsB + "</span></div>";
@@ -333,6 +336,11 @@
         }
         if (series.winnerId) {
           html += '<div class="pill">Winner: ' + U.escapeHtml((S.getTeam(series.winnerId) || {}).name || "?") + "</div>";
+        } else if (isCurrent && !decided) {
+          html += '<div class="form-actions">';
+          html += '<button class="btn btn-sm btn-primary" data-action="sim-game" data-division="' + div + '" data-series="' + series.id + '">Sim Game</button>';
+          html += '<button class="btn btn-sm" data-action="sim-series" data-division="' + div + '" data-series="' + series.id + '">Sim Series</button>';
+          html += "</div>";
         }
         html += "</div>";
       });
@@ -349,12 +357,39 @@
     wireEvents();
   }
 
+  function findSeriesInCurrentRound(divisionId, seriesId) {
+    var bracket = S.getSeason().playoffs[divisionId];
+    if (!bracket) return null;
+    var round = bracket.rounds[bracket.rounds.length - 1];
+    return round.series.find(function (s) { return s.id === seriesId; }) || null;
+  }
+
   function wireEvents() {
     container.querySelectorAll("[data-division]").forEach(function (b) {
       if (b.dataset.action) return;
       b.addEventListener("click", function () {
         view.division = b.dataset.division;
         render();
+      });
+    });
+    container.querySelectorAll('[data-action="sim-game"]').forEach(function (b) {
+      b.addEventListener("click", function () {
+        var series = findSeriesInCurrentRound(b.dataset.division, b.dataset.series);
+        if (!series) return;
+        simulateSeriesGame(series);
+        if (seriesIsDecided(series)) advanceBracket(b.dataset.division);
+        render();
+        if (window.PHLApp) window.PHLApp.refresh();
+      });
+    });
+    container.querySelectorAll('[data-action="sim-series"]').forEach(function (b) {
+      b.addEventListener("click", function () {
+        var series = findSeriesInCurrentRound(b.dataset.division, b.dataset.series);
+        if (!series) return;
+        simulateSeries(series);
+        advanceBracket(b.dataset.division);
+        render();
+        if (window.PHLApp) window.PHLApp.refresh();
       });
     });
   }

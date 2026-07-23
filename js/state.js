@@ -47,6 +47,7 @@
     if (!d.franchise) d.franchise = deepClone(starter.franchise);
     if (!d.startupDraft) d.startupDraft = deepClone(starter.startupDraft);
     if (!d.promotions) d.promotions = [];
+    if (!d.trades) d.trades = [];
     if (d.expansionDraft === undefined) d.expansionDraft = null;
     for (var key in starter.settings) {
       if (!(key in d.settings)) d.settings[key] = starter.settings[key];
@@ -312,6 +313,17 @@
     return entry;
   }
 
+  // ---------------- Trades (player-for-player between two teams) -------
+  function getTrades() {
+    return data.trades;
+  }
+  function addTrade(entry) {
+    entry.id = entry.id || U.uid("trade");
+    data.trades.push(entry);
+    save();
+    return entry;
+  }
+
   // ---------------- Expansion Draft (one-time per new expansion team) --
   function getExpansionDraft() {
     return data.expansionDraft;
@@ -396,6 +408,8 @@
     updateStartupDraft: updateStartupDraft,
     getPromotions: getPromotions,
     addPromotion: addPromotion,
+    getTrades: getTrades,
+    addTrade: addTrade,
     getExpansionDraft: getExpansionDraft,
     setExpansionDraft: setExpansionDraft,
     updateExpansionDraft: updateExpansionDraft,

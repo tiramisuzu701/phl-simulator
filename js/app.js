@@ -16,22 +16,40 @@
     schedule: window.PHLSchedule,
     standings: window.PHLStandings,
     playoffs: window.PHLPlayoffs,
-    draft: window.PHLDraft,
+    trades: window.PHLTrades,
     promotions: window.PHLPromotions,
     contracts: window.PHLContracts,
     stats: window.PHLStats,
     data: window.PHLDataTools,
   };
 
+  var TAB_LABELS = {
+    dashboard: "Dashboard",
+    startup: "Startup Draft",
+    teams: "Teams",
+    teamdetail: "Team",
+    players: "Players",
+    schedule: "Schedule",
+    standings: "Standings",
+    playoffs: "Playoffs",
+    trades: "Trades",
+    promotions: "Promotions",
+    contracts: "Contracts & Cap",
+    stats: "Stats & Offseason",
+    data: "Data Tools",
+  };
+
   function showTab(name) {
     if (!modules[name]) return;
     currentTab = name;
-    document.querySelectorAll(".tab-btn").forEach(function (b) {
-      b.classList.toggle("tab-btn-active", b.dataset.tab === name);
+    document.querySelectorAll(".nav-item").forEach(function (b) {
+      b.classList.toggle("nav-item-active", b.dataset.tab === name);
     });
     document.querySelectorAll(".tab-panel").forEach(function (p) {
       p.classList.toggle("tab-panel-active", p.id === "tab-" + name);
     });
+    var heading = document.getElementById("top-header-heading");
+    if (heading) heading.textContent = TAB_LABELS[name] || capitalize(name);
     var el = document.getElementById("tab-" + name);
     modules[name].render(el);
     updateHeaderMeta();
@@ -52,14 +70,49 @@
     updateHeaderMeta();
   }
 
+  function statPill(label, value) {
+    return '<span class="stat-pill"><span class="stat-pill-label">' + U.escapeHtml(label) + '</span><span class="stat-pill-value">' + U.escapeHtml(String(value)) + "</span></span>";
+  }
+
   function updateHeaderMeta() {
     var meta = document.getElementById("header-meta");
-    var season = S.getSeason();
-    meta.textContent =
-      "Season " + (season.seasonNumber || 1) + " · " +
-      capitalize(season.phase || "offseason") + " · " +
-      S.getTeams().length + " teams";
+    if (meta) {
+      var season = S.getSeason();
+      var Cal = window.PHLCalendar;
+      var html = statPill("Season", season.seasonNumber || 1);
+      html += statPill("Phase", capitalize(season.phase || "offseason"));
+      // weekLabel() reads like "Off-season 1/5" / "Week 3/12" / "Playoffs 2/4"
+      // — strip the leading phase word so the pill just shows "1/5" next to
+      // the "Phase" pill above, which already says what it is.
+      if (Cal && Cal.isSetupComplete()) html += statPill("Week", Cal.weekLabel().replace(/^\D*(\d.*)$/, "$1") || "—");
+      html += statPill("Teams", S.getTeams().length);
+      var franchise = S.getFranchise();
+      if (franchise && franchise.teamId) {
+        var space = S.capSpace(franchise.teamId);
+        html += '<span class="stat-pill' + (space < 0 ? " stat-pill-warn" : "") + '"><span class="stat-pill-label">Cap Space</span><span class="stat-pill-value">' + U.escapeHtml(U.formatMoney(space)) + "</span></span>";
+      }
+      meta.innerHTML = html;
+    }
+    updateSidebarFranchise();
     updateAdvanceButton();
+  }
+
+  // Franchise block pinned near the top of the sidebar — mirrors the
+  // "team crest + name + GM" block from the reference UI.
+  function updateSidebarFranchise() {
+    var el = document.getElementById("sidebar-franchise");
+    if (!el) return;
+    var franchise = S.getFranchise();
+    var team = franchise && franchise.teamId ? S.getTeam(franchise.teamId) : null;
+    if (!team) {
+      el.innerHTML = '<div class="sidebar-franchise-empty muted small">No team selected yet — finish the Startup Draft to pick one.</div>';
+      return;
+    }
+    var division = S.getDivision(team.division);
+    el.innerHTML =
+      '<div class="sidebar-team-badge" style="--accent:' + U.colorForId(team.id) + '">' + U.escapeHtml(team.abbr) + "</div>" +
+      '<div class="sidebar-team-name">' + U.escapeHtml(team.name) + "</div>" +
+      '<div class="sidebar-team-sub">GM &middot; ' + U.escapeHtml(division ? division.name : "") + "</div>";
   }
 
   // The single control that drives the whole season forward — see
@@ -75,7 +128,7 @@
     var blocked = Cal.checkBlocked();
     el.innerHTML =
       '<span class="week-pill">' + U.escapeHtml(Cal.weekLabel()) + "</span>" +
-      '<button class="btn btn-primary" id="btn-advance-week"' + (blocked ? " disabled" : "") + ">Advance Week</button>";
+      '<button class="btn btn-primary" id="btn-advance-week"' + (blocked ? " disabled" : "") + ">Advance Week &raquo;</button>";
     if (blocked) {
       el.innerHTML += '<span class="warning-banner header-block-warning">' + U.escapeHtml(blocked) + "</span>";
     }
@@ -109,10 +162,15 @@
 
   function init() {
     S.load();
-    document.querySelectorAll(".tab-btn").forEach(function (btn) {
+    document.querySelectorAll(".nav-item").forEach(function (btn) {
       btn.addEventListener("click", function () {
         showTab(btn.dataset.tab);
       });
+    });
+    var saveExit = document.getElementById("btn-save-exit");
+    if (saveExit) saveExit.addEventListener("click", function () {
+      S.save();
+      alert("Progress saved. Your league lives in this browser — use Data Tools to export a portable backup any time.");
     });
     // New/fresh saves (no GM team chosen, startup draft not finished yet)
     // open straight to the Startup Draft tab so it's the natural first step.
