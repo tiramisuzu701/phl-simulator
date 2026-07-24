@@ -293,8 +293,11 @@
   // Baseline reflects a modest esports salary; top-overall + high-potential
   // stars command up to the league max. Blends current ability (70%) with
   // upside (30%) since potential drives real-world asking prices too.
-  var SALARY_MIN = 20000;
-  var SALARY_MAX = 400000;
+  // Lowered league-wide (was 20,000-400,000) as a general economy tune-down
+  // — see also the division cap cuts in js/starterData.js and the steeper
+  // Prospect-specific pricing cut in divisionTierFactor() below.
+  var SALARY_MIN = 15000;
+  var SALARY_MAX = 300000;
 
   function salaryAsking(overall, potential) {
     potential = potential == null ? overall : potential;
@@ -334,10 +337,18 @@
 
   // Higher-tier divisions command bigger price tags for the same
   // Overall/Potential/performance — mirrors the bigger per-division salary
-  // caps (see starterData.js). Tier 1 (Prospect) ~0.85x, tier 3 (Pro) ~1.09x.
+  // caps (see starterData.js). Prospect (tier 1) got pulled down hard here
+  // (was 0.85x): its salary cap is tiny relative to Contender/Pro, but
+  // contracts were scaling almost as steeply as everyone else's, so a
+  // single good prospect could eat 25-35% of the whole division cap —
+  // nobody else came close to that share of their cap. 0.65x brings a
+  // top-of-scale Prospect contract back down to roughly the same
+  // proportion-of-cap a Contender or Pro star commands.
+  var DIVISION_TIER_FACTORS = { 1: 0.65, 2: 0.95, 3: 1.05 };
   function divisionTierFactor(tier) {
     if (tier == null) return 1;
-    return clamp(0.85 + 0.12 * (tier - 1), 0.7, 1.5);
+    if (DIVISION_TIER_FACTORS[tier] != null) return DIVISION_TIER_FACTORS[tier];
+    return clamp(0.65 + 0.20 * (tier - 1), 0.65, 1.6); // gentle extrapolation for any future tier > 3
   }
 
   // Stable (non-random-per-render) hash of a string into [0, 1), used below

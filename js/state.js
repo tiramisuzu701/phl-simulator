@@ -553,7 +553,7 @@
     var t = getTeam(teamId);
     if (!t) return 0;
     var div = getDivision(t.division);
-    var base = div && div.salaryCap != null ? div.salaryCap : 1000000;
+    var base = div && div.salaryCap != null ? div.salaryCap : 800000;
     var max = div && div.salaryCapMax != null ? div.salaryCapMax : base;
     var games = t.lastSeasonGames || 0;
     if (games <= 0) return base;

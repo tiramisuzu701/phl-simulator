@@ -30,8 +30,21 @@
   // by how many years a team keeps control of them. Not a hidden number —
   // shown right in the UI so it's clear why the AI likes or dislikes an
   // offer.
+  //
+  // Unrealized upside is discounted by age: every player league-wide has at
+  // least 88 Potential now (see js/stats.js rollPotential), so a wide gap
+  // between Overall and Potential no longer reliably signals a real
+  // prospect — it's just as likely to be a 28-year-old bench player who's
+  // simply never going to climb that far in the seasons they have left. A
+  // young player's upside counts close to full value; an older player's
+  // upside is treated as mostly theoretical, so packaging aging fringe
+  // players for a proven veteran no longer inflates value the AI doesn't
+  // actually see.
   function tradeValue(player) {
-    var v = player.overall * 2.5 + (player.potential - player.overall) * 0.8;
+    var upside = Math.max(0, (player.potential || player.overall) - player.overall);
+    var age = player.age != null ? player.age : 22;
+    var ageFactor = U.clamp(1 - (age - 19) * 0.05, 0.25, 1);
+    var v = player.overall * 2.5 + upside * 0.8 * ageFactor;
     v -= (player.salary || 0) / 8000;
     v += (player.contractYears || 0) * 2;
     return Math.round(Math.max(1, v));
@@ -310,10 +323,13 @@
 
     var giveValue = sumValue(mine); // value the AI (partner) would receive
     var getValue = sumValue(theirs); // value the AI (partner) would give up
-    // The AI won't accept losing more than ~10-15% more value than it
-    // gets back; a little randomness keeps the threshold from being a
-    // perfectly exploitable fixed number.
-    var threshold = 0.88 + (Math.random() * 0.08 - 0.04);
+    // The AI needs to come out AHEAD — it wants back at least 5-15% more
+    // value than it gives up, not just "close enough." (This used to be a
+    // threshold below 1.0, which meant the AI would knowingly accept
+    // getting less value than it gave away — that's how lopsided trades in
+    // the user's favor were sailing through. A little randomness keeps the
+    // exact number from being a perfectly exploitable fixed target.)
+    var threshold = 1.10 + (Math.random() * 0.10 - 0.05);
     var requiredValue = getValue * threshold;
     var accepted = giveValue >= requiredValue;
     if (!accepted) {
