@@ -59,14 +59,13 @@
           " over the salary cap. Release a player in the Contracts tab before advancing.";
       }
     }
-    // Regular-season only (see myUnplayedGamesThisWeek) — the user has to
-    // sim their own game(s) for the week from the Dashboard before the rest
-    // of the league's games can play out, so they always get a look at
-    // their own box score first.
-    var myGames = myUnplayedGamesThisWeek();
-    if (myGames.length) {
-      return "Simulate your team's game" + (myGames.length > 1 ? "s" : "") + " for this week on the Dashboard before advancing.";
-    }
+    // Advance Week is the one button that runs the whole season — it is NOT
+    // gated on the user simming their own game(s) first. "Sim My Game" on
+    // the Dashboard is purely an optional preview if you want to see your
+    // box score before the rest of the league plays out; skip it entirely
+    // and Advance Week will simulate your game(s) right along with everyone
+    // else's (see js/schedule.js simulateCalendarWeek, which doesn't
+    // special-case any team).
     return null;
   }
 
@@ -99,17 +98,6 @@
     games.forEach(function (g) { Sim.simulateAndApply(g); });
     S.save();
     return games;
-  }
-
-  // For people who don't want to look at a box score every single week —
-  // quietly simulates the user's own game(s) for the current week (same as
-  // "Sim My Game", just without popping up the result) and then immediately
-  // advances the week in one click. Any OTHER block (salary cap overage,
-  // Startup Draft unfinished, etc.) still applies and is surfaced normally,
-  // same as a regular Advance Week click.
-  function skipWeek() {
-    simulateMyGamesThisWeek();
-    return advanceWeek();
   }
 
   function runOffseasonWeek(season, summary) {
@@ -276,6 +264,5 @@
     advanceWeek: advanceWeek,
     myUnplayedGamesThisWeek: myUnplayedGamesThisWeek,
     simulateMyGamesThisWeek: simulateMyGamesThisWeek,
-    skipWeek: skipWeek,
   };
 })();

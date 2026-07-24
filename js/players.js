@@ -14,7 +14,7 @@
   var S = window.PHLState;
   var U = window.PHLUtil;
   var container = null;
-  var filters = { division: "", team: "", position: "", pool: "roster" };
+  var filters = { division: "", team: "", position: "", pool: "roster", search: "" };
 
   function render(el) {
     container = el || container;
@@ -45,6 +45,7 @@
     });
     html += '</select>';
     html += '<select id="filt-position"><option value="">All Positions</option><option value="F">Forward</option><option value="D">Defense</option><option value="G">Goalie</option></select>';
+    html += '<input type="search" id="filt-search" class="filt-search" placeholder="Search by name&hellip;" value="' + U.escapeHtml(filters.search) + '">';
     html += "</div>";
 
     html += '<div id="player-table-wrap"></div>';
@@ -75,6 +76,10 @@
     }
     if (filters.team) list = list.filter(function (p) { return p.teamId === filters.team; });
     if (filters.position) list = list.filter(function (p) { return p.position === filters.position; });
+    if (filters.search.trim()) {
+      var q = filters.search.trim().toLowerCase();
+      list = list.filter(function (p) { return p.name.toLowerCase().indexOf(q) !== -1; });
+    }
     list.sort(function (a, b) { return (b.overall || 0) - (a.overall || 0); });
     return list;
   }
@@ -160,6 +165,10 @@
     });
     container.querySelector("#filt-position").addEventListener("change", function (e) {
       filters.position = e.target.value;
+      renderTable();
+    });
+    container.querySelector("#filt-search").addEventListener("input", function (e) {
+      filters.search = e.target.value;
       renderTable();
     });
     container.querySelector('[data-action="gen-sample"]').addEventListener("click", function () {

@@ -94,22 +94,6 @@
         }
       });
     }
-    var skipBtn = container.querySelector('[data-action="skip-week"]');
-    if (skipBtn) {
-      skipBtn.addEventListener("click", function () {
-        var Cal = window.PHLCalendar;
-        if (!Cal) return;
-        var result = Cal.skipWeek();
-        if (window.PHLApp) window.PHLApp.refreshAll();
-        if (!result.advanced) {
-          // Simmed the user's game(s) quietly, but something else (e.g. a
-          // salary cap overage) is still blocking Advance Week — surface it
-          // rather than pretend the week moved forward.
-          alert(result.reason);
-          render();
-        }
-      });
-    }
   }
 
   // Recent games (played, most recent first) for `teamId`, tagged with
@@ -145,9 +129,9 @@
     var recent = recentForm(myTeam.id, 5);
     var upcoming = upcomingGames(myTeam.id, 3);
     // Regular-season only (see js/calendar.js myUnplayedGamesThisWeek) —
-    // the user has to sim their own game(s) for the current week here
-    // before Advance Week (top right) will unlock, so they always see
-    // their own box score before the rest of the league plays out.
+    // purely an optional preview. Advance Week (top right) is never gated
+    // on this; it'll simulate your game(s) right along with the rest of
+    // the league if you never bother clicking Sim My Game.
     var myGamesThisWeek = window.PHLCalendar ? window.PHLCalendar.myUnplayedGamesThisWeek() : [];
     var cap = S.capForTeam(myTeam.id);
     var used = S.capUsed(myTeam.id);
@@ -180,8 +164,8 @@
 
     html += '<div class="hub-section' + (myGamesThisWeek.length ? " hub-section-alert" : "") + '"><h4>This Week</h4>';
     if (myGamesThisWeek.length) {
-      html += '<p class="pill pill-warn small">Simulate your team\'s game' + (myGamesThisWeek.length > 1 ? "s" : "") +
-        " before you can advance to next week.</p>";
+      html += '<p class="pill pill-warn small">You have a game' + (myGamesThisWeek.length > 1 ? "s" : "") +
+        " to play this week.</p>";
       html += '<ul class="mini-standings">';
       myGamesThisWeek.forEach(function (g) {
         var isHome = g.homeTeamId === myTeam.id;
@@ -189,10 +173,8 @@
         html += "<li><span>" + (isHome ? "vs " : "@ ") + U.escapeHtml(opp ? opp.abbr : "?") + "</span></li>";
       });
       html += "</ul>";
-      html += '<div class="action-row">';
       html += '<button class="btn btn-primary btn-sm" data-action="sim-my-games">Sim My Game' + (myGamesThisWeek.length > 1 ? "s" : "") + '</button>';
-      html += '<button class="btn btn-sm" data-action="skip-week" title="Simulate your game(s) without viewing the box score, then advance">Skip Week</button>';
-      html += "</div>";
+      html += '<p class="muted small">Or just hit Advance Week (top right) &mdash; it\'ll simulate this for you automatically.</p>';
     } else {
       html += '<p class="muted small">' +
         (S.getSeason().phase === "regular" ? "No game to simulate this week." : "Nothing to simulate right now.") +

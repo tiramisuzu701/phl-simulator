@@ -619,6 +619,11 @@ select option {
 
 .filter-bar { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1rem; }
 .filter-bar select { min-width: 140px; }
+.filt-search, .fa-search-input {
+  min-width: 220px;
+  flex: 1 1 220px;
+}
+.fa-search-input { max-width: 320px; }
 
 /* ---------- Schedule ---------- */
 .schedule-layout { display: grid; grid-template-columns: 300px 1fr; gap: 1rem; align-items: start; }
@@ -767,9 +772,15 @@ select option {
 .stats-toolbar .tab-strip { margin-bottom: 0; }
 .stats-toolbar select { min-width: 160px; }
 .leaderboard-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  /* Flexbox rather than a fixed/auto-fit grid — a grid's last row leaves an
+     empty gap whenever the card count doesn't divide evenly into however
+     many columns happen to fit (e.g. 6 leaderboard cards at 4-columns-wide
+     leaves row 2 with just 2 cards and a big blank space). Flex-wrap lets
+     whatever ends up on the last row grow to fill it instead. */
+  display: flex;
+  flex-wrap: wrap;
   gap: 1rem;
+  align-items: flex-start;
 }
 .leaderboard-card {
   background: linear-gradient(180deg, var(--surface-1), var(--surface-2));
@@ -777,6 +788,8 @@ select option {
   border-radius: var(--radius);
   padding: 0.85rem 1rem;
   box-shadow: var(--shadow-lift);
+  flex: 1 1 300px;
+  min-width: 260px;
 }
 .leaderboard-card h4 { margin-top: 0; }
 

@@ -20,6 +20,7 @@
   // and the length/amount currently dialed in. Reset whenever a panel
   // closes or a deal resolves.
   var offer = { playerId: null, years: 2, amount: 0 };
+  var faSearch = "";
 
   function isEligible(player, divisionId) {
     if (!player.eligibleDivisions || !player.eligibleDivisions.length) return true;
@@ -84,28 +85,71 @@
       html += "</tbody></table>";
     }
 
-    var freeAgents = S.getFreeAgents().slice().sort(function (a, b) { return b.overall - a.overall; });
-    html += "<h3>Free Agents (" + freeAgents.length + ")</h3>";
-    if (!freeAgents.length) {
-      html += '<p class="muted">No free agents available. Release players or wait for the next breakout rookie class to populate the pool.</p>';
-    } else {
-      html += '<table class="data-table"><thead><tr><th>Name</th><th>Pos</th><th>Archetype</th><th>OVR</th><th>POT</th><th>Asking Price</th><th></th></tr></thead><tbody>';
-      freeAgents.forEach(function (p) {
-        var eligible = isEligible(p, team.division);
-        var asking = askingPriceFor(p, team);
-        html += "<tr><td>" + U.escapeHtml(p.name) + "</td><td>" + p.position + "</td><td>" + U.escapeHtml(p.archetype || "") + "</td><td>" + p.overall + "</td><td>" + p.potential + "</td><td>" + U.formatMoney(asking) + "</td>";
-        if (eligible) {
-          html += '<td><button class="btn btn-sm btn-primary" data-action="toggle-offer" data-mode="sign" data-id="' + p.id + '">Sign</button></td></tr>';
-        } else {
-          html += '<td><span class="pill pill-warn" title="Breakout rookies cannot jump straight to this division">Not eligible here</span></td></tr>';
-        }
-        if (offer.playerId === p.id) html += offerRow(p, team, "sign", 7);
-      });
-      html += "</tbody></table>";
-    }
+    var allFreeAgents = S.getFreeAgents();
+    html += '<div class="panel-header"><h3>Free Agents (' + allFreeAgents.length + ')</h3>' +
+      '<div class="header-actions"><input type="search" id="fa-search" class="fa-search-input" placeholder="Search free agents by name&hellip;" value="' + U.escapeHtml(faSearch) + '"></div></div>';
+    html += '<div id="fa-table-wrap">' + renderFreeAgentsTable(team) + "</div>";
 
     container.innerHTML = html;
     wireEvents();
+  }
+
+  function freeAgentsMatchingSearch() {
+    var freeAgents = S.getFreeAgents().slice().sort(function (a, b) { return b.overall - a.overall; });
+    if (faSearch.trim()) {
+      var q = faSearch.trim().toLowerCase();
+      freeAgents = freeAgents.filter(function (p) { return p.name.toLowerCase().indexOf(q) !== -1; });
+    }
+    return freeAgents;
+  }
+
+  function renderFreeAgentsTable(team) {
+    var freeAgents = freeAgentsMatchingSearch();
+    if (!freeAgents.length) {
+      return '<p class="muted">' +
+        (faSearch.trim() ? 'No free agents match "' + U.escapeHtml(faSearch.trim()) + '".' :
+          "No free agents available. Release players or wait for the next breakout rookie class to populate the pool.") +
+        "</p>";
+    }
+    var html = '<table class="data-table"><thead><tr><th>Name</th><th>Pos</th><th>Archetype</th><th>OVR</th><th>POT</th><th>Asking Price</th><th></th></tr></thead><tbody>';
+    freeAgents.forEach(function (p) {
+      var eligible = isEligible(p, team.division);
+      var asking = askingPriceFor(p, team);
+      html += "<tr><td>" + U.escapeHtml(p.name) + "</td><td>" + p.position + "</td><td>" + U.escapeHtml(p.archetype || "") + "</td><td>" + p.overall + "</td><td>" + p.potential + "</td><td>" + U.formatMoney(asking) + "</td>";
+      if (eligible) {
+        html += '<td><button class="btn btn-sm btn-primary" data-action="toggle-offer" data-mode="sign" data-id="' + p.id + '">Sign</button></td></tr>';
+      } else {
+        html += '<td><span class="pill pill-warn" title="Breakout rookies cannot jump straight to this division">Not eligible here</span></td></tr>';
+      }
+      if (offer.playerId === p.id) html += offerRow(p, team, "sign", 7);
+    });
+    html += "</tbody></table>";
+    return html;
+  }
+
+  // Re-wires just the buttons inside a freshly-replaced Free Agents table
+  // wrap (see the search input's "input" handler in wireEvents, which only
+  // swaps #fa-table-wrap's innerHTML rather than calling the full render()
+  // — doing a full re-render on every keystroke would tear down and
+  // recreate the search input itself, kicking focus out of it mid-type).
+  function wireFreeAgentTableEvents(wrap, team) {
+    wrap.querySelectorAll('[data-action="toggle-offer"]').forEach(function (b) {
+      b.addEventListener("click", function () {
+        var p = S.getPlayer(b.dataset.id);
+        if (!p) return;
+        if (offer.playerId === p.id) {
+          offer = { playerId: null, years: 2, amount: 0 };
+        } else {
+          offer = { playerId: p.id, years: 2, amount: askingPriceFor(p, team) };
+        }
+        render();
+      });
+    });
+    wrap.querySelectorAll('[data-action="send-offer"]').forEach(function (b) {
+      b.addEventListener("click", function () {
+        sendOffer(b.dataset.id, b.dataset.mode);
+      });
+    });
   }
 
   // Inline negotiation panel rendered directly under a player's row.
@@ -209,6 +253,17 @@
         sendOffer(b.dataset.id, b.dataset.mode);
       });
     });
+    var faSearchInput = container.querySelector("#fa-search");
+    if (faSearchInput) {
+      faSearchInput.addEventListener("input", function (e) {
+        faSearch = e.target.value;
+        var team = S.getTeam(selectedTeamId);
+        var wrap = container.querySelector("#fa-table-wrap");
+        if (!wrap || !team) return;
+        wrap.innerHTML = renderFreeAgentsTable(team);
+        wireFreeAgentTableEvents(wrap, team);
+      });
+    }
   }
 
   function sendOffer(playerId, mode) {
