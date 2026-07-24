@@ -152,6 +152,7 @@
           return;
         }
         if (confirm('Release "' + p.name + '" to free agency?')) {
+          S.addRelease({ teamId: selectedTeamId, playerId: p.id, playerName: p.name, reason: "manual" });
           S.updatePlayer(p.id, { teamId: null });
           render();
           if (window.PHLApp) window.PHLApp.refresh();
@@ -270,6 +271,7 @@
       patch.eligibleDivisions = null; // once signed, a breakout rookie's division restriction is lifted permanently
     }
     S.updatePlayer(p.id, patch);
+    S.addSigning({ teamId: selectedTeamId, playerId: p.id, playerName: p.name, mode: mode, salary: patch.salary, years: patch.contractYears });
     offer = { playerId: null, years: 2, amount: 0 };
     alert(p.name + " agreed to " + U.formatMoney(offer.amount || patch.salary) + " over " + patch.contractYears + " yr" + (patch.contractYears > 1 ? "s" : "") + "!");
     render();

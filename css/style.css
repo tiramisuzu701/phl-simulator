@@ -649,8 +649,8 @@ select option {
   border-radius: 6px;
   transition: background 0.15s ease;
 }
-.game-row[data-action="toggle-box"] { cursor: pointer; }
-.game-row[data-action="toggle-box"]:hover { background: rgba(79, 124, 255, 0.05); }
+.game-row[data-action="show-box"] { cursor: pointer; }
+.game-row[data-action="show-box"]:hover { background: rgba(79, 124, 255, 0.05); }
 .game-row:last-child { border-bottom: none; }
 .game-team { display: flex; align-items: center; }
 .game-team:last-child { justify-content: flex-end; text-align: right; }
@@ -690,6 +690,38 @@ select option {
   .boxscore-scoreline-team:last-child { flex-direction: row; }
 }
 
+/* ---------- Startup Draft ---------- */
+.draft-phase-stepper { margin-bottom: 1rem; }
+.draft-phase-chip { cursor: default; opacity: 0.55; }
+.draft-phase-chip.chip-active { opacity: 1; }
+.draft-phase-done { opacity: 0.85; border-color: var(--good); color: var(--good); }
+.draft-status-card { margin-bottom: 1rem; }
+.draft-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.draft-status-clock { display: flex; align-items: center; }
+.draft-status-clock-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); }
+.draft-status-clock-team { font-size: 1.15rem; font-weight: 700; }
+.draft-status-progress { flex: 1; min-width: 220px; max-width: 360px; }
+.draft-status-progress .cap-bar { margin-top: 0.35rem; }
+.draft-roster-pills { display: flex; align-items: center; gap: 0.4rem; margin: 0.75rem 0; flex-wrap: wrap; }
+.draft-pool-card { padding-bottom: 0.5rem; }
+.draft-pool-toolbar { margin-bottom: 0.6rem; }
+.draft-pool-scroll { max-height: 420px; overflow-y: auto; border-radius: 8px; }
+.draft-pool-scroll .data-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-1);
+  z-index: 1;
+}
+.draft-pool-top-pick { background: rgba(79, 124, 255, 0.08); }
+.draft-recent-picks-scroll { max-height: 320px; }
+
 /* ---------- Playoffs ---------- */
 .playoff-round { margin-bottom: 1.25rem; }
 .playoff-round h4 { margin-bottom: 0.6rem; }
@@ -717,6 +749,16 @@ select option {
 }
 
 /* ---------- Leaderboards ---------- */
+.stats-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.stats-toolbar .tab-strip { margin-bottom: 0; }
+.stats-toolbar select { min-width: 160px; }
 .leaderboard-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -952,6 +994,39 @@ select option {
 .inbox-item-title { font-weight: 600; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
 .inbox-item-text { margin-top: 0.15rem; }
 
+/* ---------- League Log ---------- */
+.log-list { display: grid; gap: 0.5rem; }
+.log-item {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  background: linear-gradient(180deg, var(--surface-1), var(--surface-2));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.65rem 0.9rem;
+}
+.log-item-icon {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--surface-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+.log-item-trade .log-item-icon { color: var(--glow-1); }
+.log-item-signing .log-item-icon { color: var(--good); }
+.log-item-release .log-item-icon { color: var(--critical); }
+.log-item-promotion .log-item-icon { color: var(--glow-2); }
+.log-item-body { flex: 1; min-width: 0; }
+.log-item-teams { font-weight: 600; display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+.log-item-detail { margin-top: 0.15rem; }
+.log-item-season { flex: 0 0 auto; }
+
 /* ---------- Scrims / chemistry ---------- */
 .chemistry-card { }
 .chemistry-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
@@ -982,6 +1057,14 @@ select option {
 
 /* ---------- Roster minimum warning (Team Management tab) ---------- */
 .roster-min-warning { border-color: var(--critical); }
+
+/* ---------- Team Management: season stats card ---------- */
+.stats-card-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.stats-card-header h3 { margin: 0; }
+.stats-mode-strip { margin-bottom: 0; }
+.stats-sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+.stats-sortable:hover { color: var(--text-primary); }
+.stats-sort-active { color: var(--glow-1); }
 
 /* ---------- Expansion Franchise logo upload preview ---------- */
 .logo-upload-preview { margin-top: 0.5rem; }

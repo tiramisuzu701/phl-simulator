@@ -22,14 +22,17 @@
     if (e.key === "Escape") close();
   }
 
-  // games: array of played game objects (with .boxscore set).
-  function showGames(games) {
+  // games: array of played game objects (with .boxscore set). opts.title
+  // overrides the default generic "Box Score(s)" heading (e.g. the
+  // Dashboard's "Sim My Game" flow passes "Your Game This Week").
+  function showGames(games, opts) {
     if (!document.body || !games || !games.length) return;
     close(); // only one instance at a time
+    opts = opts || {};
 
     var S = window.PHLState;
     var Schedule = window.PHLSchedule;
-    var title = games.length > 1 ? "Your Games This Week" : "Your Game This Week";
+    var title = opts.title || (games.length > 1 ? "Box Scores" : "Box Score");
 
     var body = "";
     games.forEach(function (g, i) {

@@ -101,6 +101,17 @@
     return games;
   }
 
+  // For people who don't want to look at a box score every single week —
+  // quietly simulates the user's own game(s) for the current week (same as
+  // "Sim My Game", just without popping up the result) and then immediately
+  // advances the week in one click. Any OTHER block (salary cap overage,
+  // Startup Draft unfinished, etc.) still applies and is surfaced normally,
+  // same as a regular Advance Week click.
+  function skipWeek() {
+    simulateMyGamesThisWeek();
+    return advanceWeek();
+  }
+
   function runOffseasonWeek(season, summary) {
     var AI = window.PHLAIManager;
     if (AI) {
@@ -265,5 +276,6 @@
     advanceWeek: advanceWeek,
     myUnplayedGamesThisWeek: myUnplayedGamesThisWeek,
     simulateMyGamesThisWeek: simulateMyGamesThisWeek,
+    skipWeek: skipWeek,
   };
 })();

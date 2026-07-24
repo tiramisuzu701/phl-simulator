@@ -276,14 +276,12 @@
       weeks[wn].forEach(function (g) {
         var home = S.getTeam(g.homeTeamId);
         var away = S.getTeam(g.awayTeamId);
-        var expanded = view.expandedGameId === g.id;
-        html += '<div class="game-row' + (g.played ? "" : " game-upcoming") + '"' + (g.played ? ' data-action="toggle-box" data-id="' + g.id + '" role="button" tabindex="0"' : "") + '>';
+        html += '<div class="game-row' + (g.played ? "" : " game-upcoming") + '"' + (g.played ? ' data-action="show-box" data-id="' + g.id + '" role="button" tabindex="0"' : "") + '>';
         html += '<span class="game-team">' + U.crestHtml(away, "crest-sm") + U.escapeHtml(away ? away.abbr : "?") + "</span>";
         html += '<span class="game-score">' + (g.played ? g.awayScore + " - " + g.homeScore + (g.wentToOT ? " OT" : "") : "@") + "</span>";
         html += '<span class="game-team">' + U.crestHtml(home, "crest-sm") + U.escapeHtml(home ? home.abbr : "?") + "</span>";
-        if (g.played) html += '<span class="muted small boxscore-toggle">' + (expanded ? "Hide box score ▲" : "Box score ▼") + "</span>";
+        if (g.played) html += '<span class="muted small boxscore-toggle">Box score</span>';
         html += "</div>";
-        if (expanded) html += renderBoxscore(g);
       });
       html += "</div>";
     });
@@ -317,7 +315,7 @@
       var home = S.getTeam(g.homeTeamId);
       var away = S.getTeam(g.awayTeamId);
       var involvesMe = g.homeTeamId === myTeamId || g.awayTeamId === myTeamId;
-      html += '<div class="game-row' + (involvesMe ? " game-row-mine" : "") + '">';
+      html += '<div class="game-row' + (involvesMe ? " game-row-mine" : "") + '" data-action="show-box" data-id="' + g.id + '" role="button" tabindex="0">';
       html += '<span class="game-team">' + U.crestHtml(away, "crest-sm") + U.escapeHtml(away ? away.abbr : "?") + "</span>";
       html += '<span class="game-score">' + g.awayScore + " - " + g.homeScore + (g.wentToOT ? " OT" : "") + "</span>";
       html += '<span class="game-team">' + U.crestHtml(home, "crest-sm") + U.escapeHtml(home ? home.abbr : "?") + "</span>";
@@ -331,7 +329,6 @@
     container.querySelectorAll("[data-division]").forEach(function (b) {
       b.addEventListener("click", function () {
         view.division = b.dataset.division;
-        view.expandedGameId = null;
         render();
       });
     });
@@ -349,10 +346,10 @@
         if (window.PHLApp) window.PHLApp.refresh();
       }
     });
-    container.querySelectorAll('[data-action="toggle-box"]').forEach(function (b) {
+    container.querySelectorAll('[data-action="show-box"]').forEach(function (b) {
       b.addEventListener("click", function () {
-        view.expandedGameId = view.expandedGameId === b.dataset.id ? null : b.dataset.id;
-        render();
+        var g = S.getSchedule().find(function (game) { return game.id === b.dataset.id; });
+        if (g && window.PHLBoxscoreModal) window.PHLBoxscoreModal.showGames([g]);
       });
     });
   }

@@ -14,7 +14,7 @@
   var S = window.PHLState;
   var U = window.PHLUtil;
   var container = null;
-  var view = { partnerId: null, mine: [], theirs: [] };
+  var view = { partnerId: null, mine: [], theirs: [], subTab: "propose" };
 
   // A simplified, transparent trade-value estimate: current ability +
   // unrealized upside, discounted by how much cap room they eat, boosted
@@ -37,6 +37,12 @@
       .sort(function (a, b) { return a.name.localeCompare(b.name); });
   }
 
+  function pendingOffers() {
+    var franchise = S.getFranchise();
+    if (!franchise || !franchise.teamId) return [];
+    return S.getNotifications().filter(function (n) { return n.type === "trade-offer" && n.payload && n.payload.userTeamId === franchise.teamId; });
+  }
+
   function render(el) {
     container = el || container;
     if (!container) return;
@@ -45,11 +51,28 @@
       container.innerHTML = '<div class="panel-header"><h2>Trades</h2></div><p class="muted">Set up your franchise on the <a href="create-save.html">Create Save</a> page first — you can only propose trades for the team you GM.</p>';
       return;
     }
+    var offers = pendingOffers();
+
+    var html = '<div class="panel-header"><h2>Trades</h2></div>';
+    html += '<div class="tab-strip">';
+    html += '<button class="chip' + (view.subTab === "propose" ? " chip-active" : "") + '" data-subtab="propose">Propose Trade</button>';
+    html += '<button class="chip' + (view.subTab === "offers" ? " chip-active" : "") + '" data-subtab="offers">Trade Offers' + (offers.length ? ' <span class="pill pill-accent small">' + offers.length + "</span>" : "") + "</button>";
+    html += "</div>";
+
+    if (view.subTab === "offers") {
+      html += renderOffers(offers);
+      container.innerHTML = html;
+      wireEvents();
+      return;
+    }
+
     var myTeamId = franchise.teamId;
     var myTeam = S.getTeam(myTeamId);
     var partners = otherTeams(myTeamId);
     if (!partners.length) {
-      container.innerHTML = '<div class="panel-header"><h2>Trades</h2></div><p class="muted">There are no other teams to trade with yet.</p>';
+      html += '<p class="muted">There are no other teams to trade with yet.</p>';
+      container.innerHTML = html;
+      wireEvents();
       return;
     }
     if (!view.partnerId || !partners.some(function (t) { return t.id === view.partnerId; })) {
@@ -58,7 +81,6 @@
     var partner = S.getTeam(view.partnerId);
 
     var windowOpen = S.isTransactionWindowOpen();
-    var html = '<div class="panel-header"><h2>Trades</h2></div>';
     html += '<p class="muted small">Propose a player-for-player trade with another team. Trade value is a simple, visible estimate — Overall + unrealized Potential, minus salary drag, plus years of contractual control — the other side won\'t accept a deal that gives up much more value than it gets back.</p>';
     if (!windowOpen) {
       html += '<p class="muted small" style="color:var(--series-red, #e05252);">The trade deadline has passed — trades are locked league-wide until the next off-season.</p>';
@@ -103,6 +125,33 @@
     wireEvents();
   }
 
+  // The "Trade Offers" sub-tab — actionable AI -> user trade offers, the
+  // same underlying notifications the Inbox lists under "Needs Action"
+  // (see js/aiManager.js aiProposeTradesToUser / js/inbox.js addTradeOffer),
+  // just surfaced right where you're already thinking about trades instead
+  // of only in the general Inbox feed.
+  function renderOffers(offers) {
+    var html = '<p class="muted small">Other teams occasionally propose a trade for one of your players — accept, reject, or leave it pending. These also show up in your Inbox.</p>';
+    if (!offers.length) {
+      html += '<div class="empty-state"><p>No pending trade offers right now — check back after advancing a few weeks.</p></div>';
+      return html;
+    }
+    html += '<div class="inbox-list">';
+    offers.forEach(function (n) {
+      html += '<div class="inbox-item' + (n.read ? "" : " inbox-item-unread") + '">';
+      html += '<div class="inbox-item-icon">⇄</div>';
+      html += '<div class="inbox-item-body">';
+      html += '<div class="inbox-item-title">' + U.escapeHtml(n.title || "") + (n.read ? "" : ' <span class="pill pill-accent small">New</span>') + "</div>";
+      html += '<div class="inbox-item-text muted small">' + U.escapeHtml(n.body || "") + "</div>";
+      html += '<div class="form-actions">' +
+        '<button class="btn btn-sm btn-primary" data-action="accept-offer" data-id="' + n.id + '">Accept</button>' +
+        '<button class="btn btn-sm btn-danger" data-action="reject-offer" data-id="' + n.id + '">Reject</button></div>';
+      html += "</div></div>";
+    });
+    html += "</div>";
+    return html;
+  }
+
   function tradeColumn(team, selected, side) {
     var roster = S.getRoster(team.id).slice().sort(function (a, b) { return b.overall - a.overall; });
     var html = '<div class="trade-column"><h3 class="trade-column-heading">' + U.crestHtml(team, "crest-sm") + U.escapeHtml(team.name) + ' <span class="muted small">(' + roster.length + ' on roster)</span></h3>';
@@ -121,6 +170,28 @@
   }
 
   function wireEvents() {
+    container.querySelectorAll("[data-subtab]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        view.subTab = b.dataset.subtab;
+        render();
+      });
+    });
+    container.querySelectorAll('[data-action="accept-offer"]').forEach(function (b) {
+      b.addEventListener("click", function () {
+        var notif = S.getNotifications().find(function (n) { return n.id === b.dataset.id; });
+        if (notif && window.PHLInbox) window.PHLInbox.resolveTradeOffer(notif, true);
+        render();
+        if (window.PHLApp) window.PHLApp.refresh();
+      });
+    });
+    container.querySelectorAll('[data-action="reject-offer"]').forEach(function (b) {
+      b.addEventListener("click", function () {
+        var notif = S.getNotifications().find(function (n) { return n.id === b.dataset.id; });
+        if (notif && window.PHLInbox) window.PHLInbox.resolveTradeOffer(notif, false);
+        render();
+        if (window.PHLApp) window.PHLApp.refresh();
+      });
+    });
     var partnerSel = container.querySelector("#trade-partner");
     if (partnerSel) partnerSel.addEventListener("change", function (e) {
       view.partnerId = e.target.value;

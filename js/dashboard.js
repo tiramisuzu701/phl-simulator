@@ -89,7 +89,25 @@
         var games = window.PHLCalendar ? window.PHLCalendar.simulateMyGamesThisWeek() : [];
         render();
         if (window.PHLApp) window.PHLApp.refreshAll();
-        if (games.length && window.PHLBoxscoreModal) window.PHLBoxscoreModal.showGames(games);
+        if (games.length && window.PHLBoxscoreModal) {
+          window.PHLBoxscoreModal.showGames(games, { title: games.length > 1 ? "Your Games This Week" : "Your Game This Week" });
+        }
+      });
+    }
+    var skipBtn = container.querySelector('[data-action="skip-week"]');
+    if (skipBtn) {
+      skipBtn.addEventListener("click", function () {
+        var Cal = window.PHLCalendar;
+        if (!Cal) return;
+        var result = Cal.skipWeek();
+        if (window.PHLApp) window.PHLApp.refreshAll();
+        if (!result.advanced) {
+          // Simmed the user's game(s) quietly, but something else (e.g. a
+          // salary cap overage) is still blocking Advance Week — surface it
+          // rather than pretend the week moved forward.
+          alert(result.reason);
+          render();
+        }
       });
     }
   }
@@ -171,7 +189,10 @@
         html += "<li><span>" + (isHome ? "vs " : "@ ") + U.escapeHtml(opp ? opp.abbr : "?") + "</span></li>";
       });
       html += "</ul>";
+      html += '<div class="action-row">';
       html += '<button class="btn btn-primary btn-sm" data-action="sim-my-games">Sim My Game' + (myGamesThisWeek.length > 1 ? "s" : "") + '</button>';
+      html += '<button class="btn btn-sm" data-action="skip-week" title="Simulate your game(s) without viewing the box score, then advance">Skip Week</button>';
+      html += "</div>";
     } else {
       html += '<p class="muted small">' +
         (S.getSeason().phase === "regular" ? "No game to simulate this week." : "Nothing to simulate right now.") +

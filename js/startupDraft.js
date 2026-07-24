@@ -373,31 +373,57 @@
     var team = teamId ? S.getTeam(teamId) : null;
     var isMyTurn = teamId === fr.teamId;
     var roundIndex = currentRoundIndex(sd);
+    var pickInPhase = sd.pickIndexInPhase + 1;
+    var totalInPhase = totalPicksInPhase(sd);
+    var phasePct = totalInPhase ? U.clamp((pickInPhase / totalInPhase) * 100, 2, 100) : 0;
 
-    var html = '<div class="panel-header"><h2>Startup Draft &mdash; ' + PHASE_LABEL[sd.phase] + ' Phase</h2></div>';
+    var html = '<div class="panel-header"><h2>Startup Draft</h2></div>';
 
-    html += '<div class="action-row">';
-    html += '<span class="pill pill-accent">On the Clock: ' + U.escapeHtml(team ? team.name : "?") + (isMyTurn ? " (You)" : "") + "</span>";
-    html += '<span class="muted">Round ' + (roundIndex + 1) + " of " + sd.roundsPerPhase + " &middot; Pick " + (sd.pickIndexInPhase + 1) + " of " + totalPicksInPhase(sd) + " this phase</span>";
+    // Phase stepper — a quick at-a-glance sense of where this draft is in
+    // its three cascading phases (Pro -> Contender -> Prospect).
+    html += '<div class="tab-strip draft-phase-stepper">';
+    PHASES.forEach(function (ph, i) {
+      var state = ph === sd.phase ? " chip-active" : (i < sd.phaseIndex ? " draft-phase-done" : "");
+      html += '<span class="chip draft-phase-chip' + state + '">' + PHASE_LABEL[ph] + (i < sd.phaseIndex ? " ✓" : "") + "</span>";
+    });
+    html += "</div>";
+
+    // On-the-clock status card
+    html += '<div class="form-card draft-status-card">';
+    html += '<div class="draft-status-row">';
+    html += '<div class="draft-status-clock">' + (team ? U.crestHtml(team, "crest-md") : "") +
+      '<div><div class="draft-status-clock-label">On the Clock</div><div class="draft-status-clock-team">' +
+      U.escapeHtml(team ? team.name : "?") + (isMyTurn ? ' <span class="pill pill-accent small">You</span>' : "") + "</div></div></div>";
+    html += '<div class="draft-status-progress">';
+    html += '<div class="muted small">' + PHASE_LABEL[sd.phase] + " Phase &middot; Round " + (roundIndex + 1) + " of " + sd.roundsPerPhase +
+      " &middot; Pick " + pickInPhase + " of " + totalInPhase + "</div>";
+    html += '<div class="cap-bar"><div class="cap-bar-fill" style="width:' + phasePct + '%"></div></div>';
+    html += "</div></div>";
+    html += '<div class="form-actions">';
     if (!isMyTurn) {
       html += '<button class="btn btn-primary" data-action="sim-next">Simulate Next Pick</button>';
       html += '<button class="btn" data-action="sim-until-me">Simulate Until My Turn</button>';
     }
     html += '<button class="btn" data-action="auto-draft-rest">Auto-Draft Remaining (Skip Ahead)</button>';
-    html += "</div>";
+    html += "</div></div>";
 
     // Your roster so far
     var myRoster = S.getRoster(fr.teamId);
     if (myRoster.length) {
       var counts = { F: 0, D: 0, G: 0 };
       myRoster.forEach(function (p) { counts[p.position] += 1; });
-      html += '<p class="muted small">Your roster so far: ' + myRoster.length + " players (F:" + counts.F + " D:" + counts.D + " G:" + counts.G + ")</p>";
+      html += '<div class="draft-roster-pills"><span class="muted small">Your roster so far (' + myRoster.length + '):</span>' +
+        '<span class="pill small">' + counts.F + " F</span><span class=\"pill small\">" + counts.D + " D</span>" +
+        '<span class="pill small">' + counts.G + " G</span></div>";
     }
 
     if (isMyTurn) {
-      html += '<div class="filter-bar"><select id="draft-pos-filter">' +
+      html += '<div class="form-card draft-pool-card">';
+      html += '<div class="draft-pool-toolbar">';
+      html += '<select id="draft-pos-filter">' +
         '<option value="">All Positions</option><option value="F">Forward</option><option value="D">Defense</option><option value="G">Goalie</option>' +
-        "</select></div>";
+        "</select>";
+      html += "</div>";
 
       var phaseCap = currentPhaseCap(sd);
       var pool = S.getStartupPool().slice().sort(function (a, b) { return b.overall - a.overall; });
@@ -412,27 +438,28 @@
         html += '<p class="muted small">You already carry ' + S.GOALIE_MAX + ' goalies — the max per team — so goalies are hidden from your board below.</p>';
         pool = pool.filter(function (p) { return p.position !== "G"; });
       }
-      html += '<table class="data-table"><thead><tr><th>Nametag</th><th>Pos</th><th>Archetype</th><th>OVR</th><th>POT</th><th></th></tr></thead><tbody>';
-      pool.forEach(function (p) {
-        html += "<tr><td>" + U.escapeHtml(p.name) + "</td><td>" + p.position + "</td><td>" + U.escapeHtml(p.archetype || "") + "</td>" +
+      html += '<div class="draft-pool-scroll"><table class="data-table"><thead><tr><th>Nametag</th><th>Pos</th><th>Archetype</th><th>OVR</th><th>POT</th><th></th></tr></thead><tbody>';
+      pool.forEach(function (p, i) {
+        html += '<tr' + (i === 0 ? ' class="draft-pool-top-pick"' : "") + '>' +
+          "<td>" + U.escapeHtml(p.name) + "</td><td>" + p.position + "</td><td>" + U.escapeHtml(p.archetype || "") + "</td>" +
           "<td><strong>" + p.overall + "</strong></td><td>" + p.potential + "</td>" +
           '<td><button class="btn btn-sm btn-primary" data-action="pick" data-id="' + p.id + '">Draft</button></td></tr>';
       });
-      html += "</tbody></table>";
+      html += "</tbody></table></div></div>";
     } else {
-      html += '<p class="muted">Watching ' + U.escapeHtml(team ? team.name : "this team") + " draft &mdash; click \"Simulate Next Pick\" to see who they take.</p>";
+      html += '<div class="empty-state"><p>Watching ' + U.escapeHtml(team ? team.name : "this team") + " draft &mdash; click \"Simulate Next Pick\" to see who they take.</p></div>";
     }
 
     if (sd.picks.length) {
-      html += '<h3>Recent Picks</h3><table class="data-table"><thead><tr><th>#</th><th>Phase</th><th>Rd</th><th>Team</th><th>Player</th><th>Pos</th><th>OVR</th></tr></thead><tbody>';
+      html += '<div class="form-card"><h3>Recent Picks</h3><div class="draft-pool-scroll draft-recent-picks-scroll"><table class="data-table compact"><thead><tr><th>#</th><th>Phase</th><th>Rd</th><th>Team</th><th>Player</th><th>Pos</th><th>OVR</th></tr></thead><tbody>';
       sd.picks.slice(-15).reverse().forEach(function (pick) {
         var t = S.getTeam(pick.teamId);
         var p = pick.playerId ? S.getPlayer(pick.playerId) : null;
         html += "<tr><td>" + pick.pickNumber + "</td><td>" + PHASE_LABEL[pick.phase] + "</td><td>" + pick.round + "</td><td>" +
-          U.escapeHtml(t ? t.abbr : "?") + "</td><td>" + (pick.playerId ? U.escapeHtml(p ? p.name : "?") : '<span class="muted">Passed (overall cutoff)</span>') +
+          (t ? U.crestHtml(t, "crest-sm") : "") + U.escapeHtml(t ? t.abbr : "?") + "</td><td>" + (pick.playerId ? U.escapeHtml(p ? p.name : "?") : '<span class="muted">Passed (overall cutoff)</span>') +
           "</td><td>" + (p ? p.position : "") + "</td><td>" + (p ? p.overall : "") + "</td></tr>";
       });
-      html += "</tbody></table>";
+      html += "</tbody></table></div></div>";
     }
 
     container.innerHTML = html;

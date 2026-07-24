@@ -48,6 +48,9 @@
     if (!d.startupDraft) d.startupDraft = deepClone(starter.startupDraft);
     if (!d.promotions) d.promotions = [];
     if (!d.trades) d.trades = [];
+    if (!d.signings) d.signings = [];
+    if (!d.releases) d.releases = [];
+    if (d.logSeq == null) d.logSeq = 0;
     if (!d.notifications) d.notifications = [];
     if (!d.mvpAwards) d.mvpAwards = [];
     for (var key in starter.settings) {
@@ -99,6 +102,18 @@
     d.teams.forEach(function (t) {
       if (t.lastSeasonWins == null) t.lastSeasonWins = 0;
       if (t.lastSeasonGames == null) t.lastSeasonGames = 0;
+    });
+    // Backfill logSeq (see nextLogSeq above) on any trade/promotion entry
+    // from before the League Log tab existed, so older saves' history still
+    // shows up there — best-effort ordering only (per-array insertion
+    // order), since old entries predate the single shared counter.
+    [d.promotions, d.trades, d.signings, d.releases].forEach(function (list) {
+      list.forEach(function (entry) {
+        if (entry.logSeq == null) {
+          d.logSeq = (d.logSeq || 0) + 1;
+          entry.logSeq = d.logSeq;
+        }
+      });
     });
   }
 
@@ -333,12 +348,24 @@
     save();
   }
 
+  // ---------------- League Log ordering -----------------------------------
+  // A single monotonic counter stamped on every trade/signing/release/
+  // promotion entry (see below) so the League Log tab (js/leagueLog.js) can
+  // merge all four event types into one true chronological feed just by
+  // sorting on logSeq — real timestamps aren't reliable here since several
+  // events can happen within the same Advance Week tick.
+  function nextLogSeq() {
+    data.logSeq = (data.logSeq || 0) + 1;
+    return data.logSeq;
+  }
+
   // ---------------- Promotions (off-season inter-division call-ups) ----
   function getPromotions() {
     return data.promotions;
   }
   function addPromotion(entry) {
     entry.id = entry.id || U.uid("promo");
+    entry.logSeq = nextLogSeq();
     data.promotions.push(entry);
     save();
     return entry;
@@ -350,7 +377,34 @@
   }
   function addTrade(entry) {
     entry.id = entry.id || U.uid("trade");
+    entry.logSeq = nextLogSeq();
     data.trades.push(entry);
+    save();
+    return entry;
+  }
+
+  // ---------------- Signings (free-agent + re-signs, league-wide) -------
+  function getSignings() {
+    return data.signings;
+  }
+  function addSigning(entry) {
+    entry.id = entry.id || U.uid("sign");
+    entry.season = entry.season || (data.season ? data.season.seasonNumber || 1 : 1);
+    entry.logSeq = nextLogSeq();
+    data.signings.push(entry);
+    save();
+    return entry;
+  }
+
+  // ---------------- Releases (league-wide) -------------------------------
+  function getReleases() {
+    return data.releases;
+  }
+  function addRelease(entry) {
+    entry.id = entry.id || U.uid("release");
+    entry.season = entry.season || (data.season ? data.season.seasonNumber || 1 : 1);
+    entry.logSeq = nextLogSeq();
+    data.releases.push(entry);
     save();
     return entry;
   }
@@ -564,6 +618,7 @@
       if (!team) return;
       if (!meetsOverallCap(p.overall, team.division)) {
         released.push({ player: p, teamId: p.teamId });
+        addRelease({ teamId: p.teamId, playerId: p.id, playerName: p.name, reason: "overall-cutoff" });
         p.teamId = null;
       }
     });
@@ -673,6 +728,10 @@
     addPromotion: addPromotion,
     getTrades: getTrades,
     addTrade: addTrade,
+    getSignings: getSignings,
+    addSigning: addSigning,
+    getReleases: getReleases,
+    addRelease: addRelease,
     isManagedTeam: isManagedTeam,
     isUserRelevantTeam: isUserRelevantTeam,
     ROSTER_MIN: ROSTER_MIN,

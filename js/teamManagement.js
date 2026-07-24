@@ -13,6 +13,11 @@
   var S = window.PHLState;
   var U = window.PHLUtil;
   var container = null;
+  var view = {
+    statsMode: "regular", // "regular" | "playoffs"
+    skaterSort: { key: "pts", dir: "desc" },
+    goalieSort: { key: "svPct", dir: "desc" },
+  };
 
   function render(el) {
     container = el || container;
@@ -76,12 +81,93 @@
     }
     html += "</div>";
 
+    html += renderStatsCard(roster);
+
     container.innerHTML = html;
     wireEvents();
   }
 
   function statTile(label, value) {
     return '<div class="stat-tile"><div class="stat-tile-value">' + U.escapeHtml(String(value)) + '</div><div class="stat-tile-label">' + U.escapeHtml(label) + "</div></div>";
+  }
+
+  var SKATER_COLS = [
+    { key: "gp", label: "GP" },
+    { key: "g", label: "G" },
+    { key: "a", label: "A" },
+    { key: "pts", label: "PTS" },
+    { key: "plusMinus", label: "+/-" },
+  ];
+  var GOALIE_COLS = [
+    { key: "gp", label: "GP" },
+    { key: "saves", label: "SV" },
+    { key: "shotsAgainst", label: "SA" },
+    { key: "goalsAgainst", label: "GA" },
+    { key: "svPct", label: "SV%", fmt: function (v) { return (v * 100).toFixed(1) + "%"; } },
+    { key: "gaa", label: "GAA", fmt: function (v) { return v.toFixed(2); } },
+  ];
+
+  function sortedRows(rows, statsField, sort) {
+    return rows.slice().sort(function (a, b) {
+      var av = (a[statsField] || {})[sort.key] || 0;
+      var bv = (b[statsField] || {})[sort.key] || 0;
+      return sort.dir === "asc" ? av - bv : bv - av;
+    });
+  }
+
+  function statsTable(rows, cols, statsField, sort, tableKey) {
+    var html = '<table class="data-table compact"><thead><tr><th>Nametag</th><th>Pos</th>';
+    cols.forEach(function (c) {
+      var active = sort.key === c.key;
+      html += '<th class="stats-sortable' + (active ? " stats-sort-active" : "") + '" data-action="sort-stats" data-table="' + tableKey + '" data-key="' + c.key + '">' +
+        c.label + (active ? (sort.dir === "asc" ? " ▲" : " ▼") : "") + "</th>";
+    });
+    html += "</tr></thead><tbody>";
+    sortedRows(rows, statsField, sort).forEach(function (p) {
+      var s = p[statsField] || {};
+      html += "<tr><td>" + U.escapeHtml(p.name) + "</td><td>" + p.position + "</td>";
+      cols.forEach(function (c) {
+        var v = s[c.key] || 0;
+        html += "<td>" + (c.fmt ? c.fmt(v) : v) + "</td>";
+      });
+      html += "</tr>";
+    });
+    html += "</tbody></table>";
+    return html;
+  }
+
+  // Sortable regular-season/playoff stat tables for the user's own roster —
+  // separate Skaters/Goalies tables (their stat columns don't overlap),
+  // each independently sortable by clicking a column header.
+  function renderStatsCard(roster) {
+    var statsField = view.statsMode === "playoffs" ? "playoffStats" : "stats";
+    var skaters = roster.filter(function (p) { return p.position !== "G"; });
+    var goalies = roster.filter(function (p) { return p.position === "G"; });
+    var anyGamesPlayed = roster.some(function (p) { return (p[statsField] || {}).gp > 0; });
+
+    var html = '<div class="form-card">';
+    html += '<div class="stats-card-header"><h3>Season Stats</h3><div class="tab-strip stats-mode-strip">';
+    html += '<button class="chip' + (view.statsMode === "regular" ? " chip-active" : "") + '" data-statsmode="regular">Regular Season</button>';
+    html += '<button class="chip' + (view.statsMode === "playoffs" ? " chip-active" : "") + '" data-statsmode="playoffs">Playoffs</button>';
+    html += "</div></div>";
+
+    if (!roster.length) {
+      html += '<p class="muted small">No players on this roster yet.</p></div>';
+      return html;
+    }
+    if (!anyGamesPlayed) {
+      html += '<p class="muted small">' + (view.statsMode === "playoffs" ? "No playoff games played yet this cycle." : "No regular-season games played yet.") + "</p></div>";
+      return html;
+    }
+
+    if (skaters.length) {
+      html += "<h4>Skaters</h4>" + statsTable(skaters, SKATER_COLS, statsField, view.skaterSort, "skater");
+    }
+    if (goalies.length) {
+      html += "<h4>Goalies</h4>" + statsTable(goalies, GOALIE_COLS, statsField, view.goalieSort, "goalie");
+    }
+    html += "</div>";
+    return html;
   }
 
   function wireEvents() {
@@ -95,6 +181,24 @@
     container.querySelectorAll("[data-goto]").forEach(function (b) {
       b.addEventListener("click", function () {
         if (window.PHLApp) window.PHLApp.showTab(b.dataset.goto);
+      });
+    });
+    container.querySelectorAll("[data-statsmode]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        view.statsMode = b.dataset.statsmode;
+        render();
+      });
+    });
+    container.querySelectorAll('[data-action="sort-stats"]').forEach(function (b) {
+      b.addEventListener("click", function () {
+        var sort = b.dataset.table === "goalie" ? view.goalieSort : view.skaterSort;
+        if (sort.key === b.dataset.key) {
+          sort.dir = sort.dir === "asc" ? "desc" : "asc";
+        } else {
+          sort.key = b.dataset.key;
+          sort.dir = "desc";
+        }
+        render();
       });
     });
   }

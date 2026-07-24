@@ -421,14 +421,10 @@
           html += '<div class="series-games muted small">';
           series.games.forEach(function (g) {
             var h = S.getTeam(g.homeTeamId);
-            var gameKey = series.id + ":" + g.gameNum;
-            var expanded = view.expandedSeriesGame === gameKey;
-            html += '<span class="series-game-toggle" data-action="toggle-series-box" data-key="' + gameKey + '" role="button" tabindex="0">G' + g.gameNum + ": " +
+            html += '<span class="series-game-toggle" data-action="show-series-box" data-series="' + series.id + '" data-gamenum="' + g.gameNum + '" role="button" tabindex="0">G' + g.gameNum + ": " +
               g.awayScore + "-" + g.homeScore + "@" + (h ? h.abbr : "?") + (g.wentToOT ? " OT" : "") + "</span>  ";
           });
           html += "</div>";
-          var expandedGame = series.games.find(function (g) { return view.expandedSeriesGame === series.id + ":" + g.gameNum; });
-          if (expandedGame && window.PHLSchedule) html += window.PHLSchedule.renderBoxscore(expandedGame);
         }
         if (series.winnerId) {
           html += '<div class="pill">Winner: ' + U.escapeHtml((S.getTeam(series.winnerId) || {}).name || "?") + "</div>";
@@ -460,6 +456,19 @@
     return round.series.find(function (s) { return s.id === seriesId; }) || null;
   }
 
+  // Same lookup, but across EVERY round in the bracket (not just the
+  // current one) — used for the box score pop-up, since a completed
+  // earlier round's games should still be viewable.
+  function findSeriesAnyRound(divisionId, seriesId) {
+    var bracket = S.getSeason().playoffs[divisionId];
+    if (!bracket) return null;
+    for (var i = 0; i < bracket.rounds.length; i++) {
+      var found = bracket.rounds[i].series.find(function (s) { return s.id === seriesId; });
+      if (found) return found;
+    }
+    return null;
+  }
+
   function wireEvents() {
     container.querySelectorAll("[data-division]").forEach(function (b) {
       if (b.dataset.action) return;
@@ -488,10 +497,11 @@
         if (window.PHLApp) window.PHLApp.refresh();
       });
     });
-    container.querySelectorAll('[data-action="toggle-series-box"]').forEach(function (b) {
+    container.querySelectorAll('[data-action="show-series-box"]').forEach(function (b) {
       b.addEventListener("click", function () {
-        view.expandedSeriesGame = view.expandedSeriesGame === b.dataset.key ? null : b.dataset.key;
-        render();
+        var series = findSeriesAnyRound(view.division, b.dataset.series);
+        var game = series && series.games.find(function (g) { return String(g.gameNum) === b.dataset.gamenum; });
+        if (game && window.PHLBoxscoreModal) window.PHLBoxscoreModal.showGames([game]);
       });
     });
     container.querySelectorAll('[data-action="apply-growth-pick"]').forEach(function (b) {

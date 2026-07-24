@@ -7,6 +7,7 @@
   var U = window.PHLUtil;
   var container = null;
   var divFilter = "";
+  var subTab = "leaders"; // "leaders" | "playoffs" | "awards" | "season"
 
   function leaderboard(list, keyFn, limit, opts) {
     opts = opts || {};
@@ -60,72 +61,106 @@
     return html;
   }
 
+  var SUBTABS = [
+    { key: "leaders", label: "League Leaders" },
+    { key: "playoffs", label: "Playoff Leaders" },
+    { key: "awards", label: "Awards" },
+    { key: "season", label: "Season" },
+  ];
+
   function render(el) {
     container = el || container;
     if (!container) return;
     var divisions = S.getDivisions();
+    var activeDiv = effectiveDivFilter();
+
+    // A clean, single-line header: title, sub-tabs (mirrors the sidebar's
+    // own tab-based navigation instead of one long stacked page), and the
+    // division picker all together so there's no hunting for the filter.
+    var html = '<div class="panel-header"><h2>Stats &amp; Offseason</h2></div>';
+    html += '<div class="stats-toolbar">';
+    html += '<div class="tab-strip">';
+    SUBTABS.forEach(function (t) {
+      html += '<button class="chip' + (subTab === t.key ? " chip-active" : "") + '" data-subtab="' + t.key + '">' + t.label + "</button>";
+    });
+    html += "</div>";
+    if (subTab !== "season") {
+      html += '<select id="stats-division">';
+      divisions.forEach(function (d) {
+        html += '<option value="' + d.id + '"' + (activeDiv === d.id ? " selected" : "") + ">" + U.escapeHtml(d.name) + "</option>";
+      });
+      html += "</select>";
+    }
+    html += "</div>";
+
+    if (subTab === "leaders") html += renderLeadersView();
+    else if (subTab === "playoffs") html += renderPlayoffLeadersView();
+    else if (subTab === "awards") html += renderAwardsView();
+    else html += renderSeasonView();
+
+    container.innerHTML = html;
+    wireEvents();
+  }
+
+  function renderLeadersView() {
     var players = playersInScope();
     var skaters = players.filter(function (p) { return p.position !== "G" && p.stats.gp > 0; });
     var goalies = players.filter(function (p) { return p.position === "G" && p.stats.gp > 0; });
-
-    var activeDiv = effectiveDivFilter();
-    var html = '<div class="panel-header"><h2>League Leaders</h2></div>';
-    html += '<div class="filter-bar"><select id="stats-division">';
-    divisions.forEach(function (d) {
-      html += '<option value="' + d.id + '"' + (activeDiv === d.id ? " selected" : "") + ">" + U.escapeHtml(d.name) + "</option>";
-    });
-    html += "</select></div>";
-
-    html += '<div class="leaderboard-grid">';
+    var html = '<div class="leaderboard-grid">';
     html += renderBoard("Points", leaderboard(skaters, function (p) { return p.stats.pts; }, 10), "PTS", function (p) { return p.stats.pts; });
     html += renderBoard("Goals", leaderboard(skaters, function (p) { return p.stats.g; }, 10), "G", function (p) { return p.stats.g; });
     html += renderBoard("Assists", leaderboard(skaters, function (p) { return p.stats.a; }, 10), "A", function (p) { return p.stats.a; });
     html += renderBoard("Plus/Minus", leaderboard(skaters, function (p) { return p.stats.plusMinus; }, 10), "+/-", function (p) { return p.stats.plusMinus; });
     html += renderBoard("Save %", leaderboard(goalies, function (p) { return p.stats.svPct; }, 10, { min: 5, countFn: function (p) { return p.stats.shotsAgainst; } }), "SV%", function (p) { return (p.stats.svPct * 100).toFixed(1); });
-    html += renderBoard("GAA (lower is better)", leaderboard(goalies, function (p) { return p.stats.gaa; }, 10, { asc: true, min: 3, countFn: function (p) { return p.stats.gp; } }), "GAA", function (p) { return p.stats.gaa; });
+    html += renderBoard("GAA", leaderboard(goalies, function (p) { return p.stats.gaa; }, 10, { asc: true, min: 3, countFn: function (p) { return p.stats.gp; } }), "GAA", function (p) { return p.stats.gaa; });
     html += "</div>";
+    return html;
+  }
 
+  function renderPlayoffLeadersView() {
     var playoffPlayers = playersInScope().filter(function (p) { return p.playoffStats && p.playoffStats.gp > 0; });
     var playoffSkaters = playoffPlayers.filter(function (p) { return p.position !== "G"; });
     var playoffGoalies = playoffPlayers.filter(function (p) { return p.position === "G"; });
-    html += '<div class="panel-header" style="margin-top:2rem"><h2>Playoff Leaders</h2></div>';
     if (!playoffPlayers.length) {
-      html += '<p class="muted small">No playoff games have been played yet this cycle.</p>';
-    } else {
-      html += '<div class="leaderboard-grid">';
-      html += renderBoard("Playoff Points", leaderboard(playoffSkaters, function (p) { return p.playoffStats.pts; }, 10), "PTS", function (p) { return p.playoffStats.pts; });
-      html += renderBoard("Playoff Goals", leaderboard(playoffSkaters, function (p) { return p.playoffStats.g; }, 10), "G", function (p) { return p.playoffStats.g; });
-      html += renderBoard("Playoff Assists", leaderboard(playoffSkaters, function (p) { return p.playoffStats.a; }, 10), "A", function (p) { return p.playoffStats.a; });
-      html += renderBoard("Playoff Save %", leaderboard(playoffGoalies, function (p) { return p.playoffStats.svPct; }, 10, { min: 2, countFn: function (p) { return p.playoffStats.shotsAgainst; } }), "SV%", function (p) { return (p.playoffStats.svPct * 100).toFixed(1); });
-      html += "</div>";
+      return '<div class="empty-state"><p>No playoff games have been played yet this cycle.</p></div>';
     }
+    var html = '<div class="leaderboard-grid">';
+    html += renderBoard("Playoff Points", leaderboard(playoffSkaters, function (p) { return p.playoffStats.pts; }, 10), "PTS", function (p) { return p.playoffStats.pts; });
+    html += renderBoard("Playoff Goals", leaderboard(playoffSkaters, function (p) { return p.playoffStats.g; }, 10), "G", function (p) { return p.playoffStats.g; });
+    html += renderBoard("Playoff Assists", leaderboard(playoffSkaters, function (p) { return p.playoffStats.a; }, 10), "A", function (p) { return p.playoffStats.a; });
+    html += renderBoard("Playoff Save %", leaderboard(playoffGoalies, function (p) { return p.playoffStats.svPct; }, 10, { min: 2, countFn: function (p) { return p.playoffStats.shotsAgainst; } }), "SV%", function (p) { return (p.playoffStats.svPct * 100).toFixed(1); });
+    html += "</div>";
+    return html;
+  }
 
+  function renderAwardsView() {
     var mvpAwards = S.getMvpAwards().filter(function (a) { return a.season === S.getSeason().seasonNumber; });
-    if (mvpAwards.length) {
-      html += '<div class="panel-header" style="margin-top:2rem"><h2>Awards &mdash; Season ' + S.getSeason().seasonNumber + "</h2></div>";
-      html += '<div class="leaderboard-grid">';
-      mvpAwards.slice().reverse().forEach(function (a) {
-        var p = S.getPlayer(a.playerId);
-        var div = S.getDivision(a.divisionId);
-        var label = a.type === "first-half" ? "First-Half MVP" : a.type === "second-half" ? "Second-Half MVP" : "Playoff Series MVP";
-        html += '<div class="leaderboard-card mvp-card"><span class="pill pill-mvp">&#127942; ' + U.escapeHtml(label) + '</span>' +
-          '<h4>' + U.escapeHtml(p ? p.name : "?") + "</h4>" +
-          '<p class="muted small">' + U.escapeHtml(div ? div.name : "") + " Division</p></div>";
-      });
-      html += "</div>";
+    if (!mvpAwards.length) {
+      return '<div class="empty-state"><p>No awards announced yet this season — First-Half MVPs land at week 7, Second-Half at season\'s end, and Playoff Series MVPs as each series wraps up.</p></div>';
     }
+    var html = '<h3>Season ' + S.getSeason().seasonNumber + "</h3>";
+    html += '<div class="leaderboard-grid">';
+    mvpAwards.slice().reverse().forEach(function (a) {
+      var p = S.getPlayer(a.playerId);
+      var div = S.getDivision(a.divisionId);
+      var label = a.type === "first-half" ? "First-Half MVP" : a.type === "second-half" ? "Second-Half MVP" : "Playoff Series MVP";
+      html += '<div class="leaderboard-card mvp-card"><span class="pill pill-mvp">&#127942; ' + U.escapeHtml(label) + '</span>' +
+        '<h4>' + U.escapeHtml(p ? p.name : "?") + "</h4>" +
+        '<p class="muted small">' + U.escapeHtml(div ? div.name : "") + " Division</p></div>";
+    });
+    html += "</div>";
+    return html;
+  }
 
+  function renderSeasonView() {
     var retiredCount = S.getRetiredPlayers().length;
-    html += '<div class="panel-header" style="margin-top:2rem"><h2>Offseason</h2></div>';
-    html += '<div class="form-card"><p class="muted">Season ' + S.getSeason().seasonNumber + " &middot; Phase: " + S.getSeason().phase +
+    var html = '<div class="form-card"><h3>Season ' + S.getSeason().seasonNumber + '</h3><p class="muted">Phase: ' + U.escapeHtml(S.getSeason().phase) +
       (retiredCount ? " &middot; " + retiredCount + " retired legend(s)" : "") + '</p>';
     html += "<p>Aging, decline, retirement, contract expiry, the breakout rookie class, and building the next schedule all " +
       "now happen automatically when Advance Week (top right) rolls out of the off-season — nothing to click here. " +
       "You can still drop in an extra rookie class by hand any time if you want more free agents on the market.</p>";
     html += '<button class="btn" data-action="gen-rookies">Generate Rookie Class Only</button></div>';
-
-    container.innerHTML = html;
-    wireEvents();
+    return html;
   }
 
   // Growth window: development is strongest from rookie age through
@@ -253,11 +288,19 @@
   }
 
   function wireEvents() {
-    container.querySelector("#stats-division").addEventListener("change", function (e) {
+    container.querySelectorAll("[data-subtab]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        subTab = b.dataset.subtab;
+        render();
+      });
+    });
+    var divSel = container.querySelector("#stats-division");
+    if (divSel) divSel.addEventListener("change", function (e) {
       divFilter = e.target.value;
       render();
     });
-    container.querySelector('[data-action="gen-rookies"]').addEventListener("click", function () {
+    var genBtn = container.querySelector('[data-action="gen-rookies"]');
+    if (genBtn) genBtn.addEventListener("click", function () {
       var rookies = generateRookieClass();
       render();
       if (window.PHLApp) window.PHLApp.refresh();

@@ -65,6 +65,7 @@
         var asking = U.contractAskingPrice(pick, division ? division.tier : null);
         if (Math.random() < U.contractRejectChance(asking, asking, years)) break; // rare, but a player can still say no
         S.updatePlayer(pick.id, { teamId: team.id, contractYears: years, salary: asking, eligibleDivisions: null });
+        S.addSigning({ teamId: team.id, playerId: pick.id, playerName: pick.name, mode: "sign", salary: asking, years: years });
         signed.push({ teamId: team.id, playerId: pick.id });
       }
     });
@@ -259,6 +260,7 @@
       // trade-off.
       var cut = roster.find(function (p) { return S.wouldMeetRosterMinimum(teamId, [p.id]); });
       if (!cut) break;
+      S.addRelease({ teamId: teamId, playerId: cut.id, playerName: cut.name, reason: "cap-compliance" });
       S.updatePlayer(cut.id, { teamId: null });
       released.push(cut);
     }

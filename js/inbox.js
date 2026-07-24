@@ -191,5 +191,6 @@
     render: render,
     addNotification: addNotification,
     addTradeOffer: addTradeOffer,
+    resolveTradeOffer: resolveTradeOffer,
   };
 })();

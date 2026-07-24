@@ -23,6 +23,7 @@
     scrims: window.PHLScrims,
     inbox: window.PHLInbox,
     stats: window.PHLStats,
+    log: window.PHLLeagueLog,
     data: window.PHLDataTools,
   };
 
@@ -42,6 +43,7 @@
     scrims: "Scrims",
     inbox: "Inbox",
     stats: "Stats & Offseason",
+    log: "League Log",
     data: "Data Tools",
   };
 
@@ -167,9 +169,17 @@
       return;
     }
     var blocked = Cal.checkBlocked();
+    // Only the "you still have a game to sim" block has a one-click way
+    // around it (Skip Week). Other blocks (salary cap overage, Startup
+    // Draft unfinished) need the user to actually go fix something, so no
+    // skip is offered for those.
+    var blockedByMyGames = blocked && Cal.myUnplayedGamesThisWeek().length > 0;
     el.innerHTML =
       '<span class="week-pill">' + U.escapeHtml(Cal.weekLabel()) + "</span>" +
       '<button class="btn btn-primary" id="btn-advance-week"' + (blocked ? " disabled" : "") + ">Advance Week &raquo;</button>";
+    if (blockedByMyGames) {
+      el.innerHTML += '<button class="btn btn-sm" id="btn-skip-week" title="Simulate your game(s) without viewing the box score, then advance">Skip Week</button>';
+    }
     if (blocked) {
       el.innerHTML += '<span class="warning-banner header-block-warning">' + U.escapeHtml(blocked) + "</span>";
     }
@@ -187,6 +197,21 @@
           // A lightweight, non-blocking heads-up rather than a modal per
           // week — full detail always lives in the relevant tab.
           console.log("[Advance Week]", result.summary.join(" "));
+        }
+      });
+    }
+    var skipBtn = document.getElementById("btn-skip-week");
+    if (skipBtn) {
+      skipBtn.addEventListener("click", function () {
+        var result = Cal.skipWeek();
+        if (!result.advanced) {
+          alert(result.reason);
+          updateAdvanceButton();
+          return;
+        }
+        refreshAll();
+        if (result.summary && result.summary.length) {
+          console.log("[Skip Week]", result.summary.join(" "));
         }
       });
     }
