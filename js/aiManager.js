@@ -239,6 +239,75 @@
     return [{ aiTeamId: partner.id, userTeamId: myTeam.id }];
   }
 
+  // ---------------- Roster-minimum enforcement (2F/2D/1G) ----------------
+  // Every team must carry a LEGAL lineup (2F/2D/1G, 5 players) any time the
+  // season is actually being played — regular season AND playoffs. Only the
+  // off-season is a rebuilding window where this is relaxed (see
+  // js/state.js wouldMeetRosterMinimum). AI teams that fall short (a
+  // contract expiring, a forced cap-compliance release, etc.) sign whatever
+  // is cheapest and legally eligible at the missing position — even a deep
+  // bench 52 overall — because fielding a legal roster always wins over a
+  // quality or cap preference here. Contrast with aiSignFreeAgents(), which
+  // is a normal-times roster-building pass that respects cap space; this is
+  // an emergency fill that does NOT check cap space at all.
+  function forceFillRosterMinimum(teamId) {
+    var signed = [];
+    var team = S.getTeam(teamId);
+    if (!team) return signed;
+    var division = S.getDivision(team.division);
+    var guard = 0;
+    while (guard < 6) {
+      guard++;
+      var roster = S.getRoster(teamId);
+      if (S.rosterMeetsMinimum(roster)) break;
+      var counts = positionCounts(teamId);
+      var neededPos = ["G", "D", "F"].filter(function (pos) { return counts[pos] < S.ROSTER_MIN[pos]; })[0];
+      if (!neededPos) break; // shouldn't happen (ROSTER_MIN positions sum to the total), but don't loop forever
+      var candidates = S.getFreeAgents().filter(function (p) {
+        if (p.position !== neededPos) return false;
+        if (!isEligible(p, team.division)) return false;
+        if (!S.meetsOverallCap(p.overall, team.division)) return false;
+        if (p.position === "G" && counts.G >= S.GOALIE_MAX) return false;
+        return true;
+      });
+      if (!candidates.length) break; // nobody legally signable left at this position — nothing more we can do
+      // Cheapest available, not the best — this is a forced emergency fill
+      // to stay roster-legal, not a quality upgrade, so don't cherry-pick
+      // the highest overall (that's what aiSignFreeAgents is for).
+      candidates.sort(function (a, b) {
+        return U.contractAskingPrice(a, division ? division.tier : null) - U.contractAskingPrice(b, division ? division.tier : null);
+      });
+      var pick = candidates[0];
+      var asking = U.contractAskingPrice(pick, division ? division.tier : null);
+      S.updatePlayer(pick.id, { teamId: teamId, contractYears: 1, salary: asking, eligibleDivisions: null });
+      S.addSigning({ teamId: teamId, playerId: pick.id, playerName: pick.name, mode: "sign", salary: asking, years: 1, reason: "roster-minimum" });
+      signed.push({ teamId: teamId, playerId: pick.id });
+    }
+    return signed;
+  }
+
+  // Runs roster-minimum compliance across the whole league (regular season
+  // and playoffs only — see forceFillRosterMinimum). AI teams short of the
+  // minimum get force-signed automatically; if the human's own team is
+  // short, it's reported back (unfixed) so the calendar engine can block
+  // Advance Week on it, the same treatment as a cap overage — the human GM
+  // decides who to sign, nobody signs on their behalf.
+  function enforceRosterMinimumForAllTeams() {
+    if ((S.getSeason() || {}).phase === "offseason") return { forced: [], userBelowMinimum: null };
+    var franchiseTeamId = (S.getFranchise() || {}).teamId;
+    var forced = [];
+    var userBelowMinimum = null;
+    S.getTeams().forEach(function (t) {
+      if (t.id === franchiseTeamId) {
+        if (!S.rosterMeetsMinimum(S.getRoster(t.id))) userBelowMinimum = { teamId: t.id };
+        return;
+      }
+      var signed = forceFillRosterMinimum(t.id);
+      if (signed.length) forced.push({ teamId: t.id, players: signed });
+    });
+    return { forced: forced, userBelowMinimum: userBelowMinimum };
+  }
+
   // ---------------- Salary cap enforcement ----------------
   // Releases the lowest-Overall players on a team, one at a time, until
   // it's cap-compliant. Used automatically for every AI team; the human
@@ -294,5 +363,7 @@
     aiProposeTradesToUser: aiProposeTradesToUser,
     enforceCapForAllTeams: enforceCapForAllTeams,
     autoReleaseToCompliance: autoReleaseToCompliance,
+    forceFillRosterMinimum: forceFillRosterMinimum,
+    enforceRosterMinimumForAllTeams: enforceRosterMinimumForAllTeams,
   };
 })();

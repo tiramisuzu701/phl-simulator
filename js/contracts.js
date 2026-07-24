@@ -21,6 +21,17 @@
   // closes or a deal resolves.
   var offer = { playerId: null, years: 2, amount: 0 };
   var faSearch = "";
+  // Positional/column sorting for the Free Agents table — click a header to
+  // sort by it, click again to flip direction. Mirrors the sortable-column
+  // pattern already used for roster stats in js/teamManagement.js.
+  var faSort = { key: "overall", dir: "desc" };
+  var FA_COLS = [
+    { key: "name", label: "Name" },
+    { key: "position", label: "Pos" },
+    { key: "overall", label: "OVR" },
+    { key: "potential", label: "POT" },
+    { key: "asking", label: "Asking Price" },
+  ];
 
   function isEligible(player, divisionId) {
     if (!player.eligibleDivisions || !player.eligibleDivisions.length) return true;
@@ -94,28 +105,44 @@
     wireEvents();
   }
 
-  function freeAgentsMatchingSearch() {
-    var freeAgents = S.getFreeAgents().slice().sort(function (a, b) { return b.overall - a.overall; });
+  function freeAgentsMatchingSearch(team) {
+    var freeAgents = S.getFreeAgents().slice();
     if (faSearch.trim()) {
       var q = faSearch.trim().toLowerCase();
       freeAgents = freeAgents.filter(function (p) { return p.name.toLowerCase().indexOf(q) !== -1; });
     }
+    freeAgents.sort(function (a, b) {
+      var av, bv;
+      if (faSort.key === "name") { av = a.name.toLowerCase(); bv = b.name.toLowerCase(); }
+      else if (faSort.key === "position") { av = a.position; bv = b.position; }
+      else if (faSort.key === "asking") { av = team ? askingPriceFor(a, team) : 0; bv = team ? askingPriceFor(b, team) : 0; }
+      else { av = a[faSort.key] || 0; bv = b[faSort.key] || 0; }
+      if (av < bv) return faSort.dir === "asc" ? -1 : 1;
+      if (av > bv) return faSort.dir === "asc" ? 1 : -1;
+      return a.name.localeCompare(b.name); // stable tie-break
+    });
     return freeAgents;
   }
 
   function renderFreeAgentsTable(team) {
-    var freeAgents = freeAgentsMatchingSearch();
+    var freeAgents = freeAgentsMatchingSearch(team);
     if (!freeAgents.length) {
       return '<p class="muted">' +
         (faSearch.trim() ? 'No free agents match "' + U.escapeHtml(faSearch.trim()) + '".' :
           "No free agents available. Release players or wait for the next breakout rookie class to populate the pool.") +
         "</p>";
     }
-    var html = '<table class="data-table"><thead><tr><th>Name</th><th>Pos</th><th>Archetype</th><th>OVR</th><th>POT</th><th>Asking Price</th><th></th></tr></thead><tbody>';
+    var html = '<table class="data-table"><thead><tr>';
+    FA_COLS.forEach(function (c) {
+      var active = faSort.key === c.key;
+      html += '<th class="stats-sortable' + (active ? " stats-sort-active" : "") + '" data-action="sort-fa" data-key="' + c.key + '">' +
+        c.label + (active ? (faSort.dir === "asc" ? " &#9650;" : " &#9660;") : "") + "</th>";
+    });
+    html += '<th>Archetype</th><th></th></tr></thead><tbody>';
     freeAgents.forEach(function (p) {
       var eligible = isEligible(p, team.division);
       var asking = askingPriceFor(p, team);
-      html += "<tr><td>" + U.escapeHtml(p.name) + "</td><td>" + p.position + "</td><td>" + U.escapeHtml(p.archetype || "") + "</td><td>" + p.overall + "</td><td>" + p.potential + "</td><td>" + U.formatMoney(asking) + "</td>";
+      html += "<tr><td>" + U.escapeHtml(p.name) + "</td><td>" + p.position + "</td><td>" + p.overall + "</td><td>" + p.potential + "</td><td>" + U.formatMoney(asking) + "</td><td>" + U.escapeHtml(p.archetype || "") + "</td>";
       if (eligible) {
         html += '<td><button class="btn btn-sm btn-primary" data-action="toggle-offer" data-mode="sign" data-id="' + p.id + '">Sign</button></td></tr>';
       } else {
@@ -148,6 +175,17 @@
     wrap.querySelectorAll('[data-action="send-offer"]').forEach(function (b) {
       b.addEventListener("click", function () {
         sendOffer(b.dataset.id, b.dataset.mode);
+      });
+    });
+    wrap.querySelectorAll('[data-action="sort-fa"]').forEach(function (b) {
+      b.addEventListener("click", function () {
+        if (faSort.key === b.dataset.key) {
+          faSort.dir = faSort.dir === "asc" ? "desc" : "asc";
+        } else {
+          faSort.key = b.dataset.key;
+          faSort.dir = b.dataset.key === "name" || b.dataset.key === "position" ? "asc" : "desc";
+        }
+        render();
       });
     });
   }
@@ -253,6 +291,17 @@
         sendOffer(b.dataset.id, b.dataset.mode);
       });
     });
+    container.querySelectorAll('[data-action="sort-fa"]').forEach(function (b) {
+      b.addEventListener("click", function () {
+        if (faSort.key === b.dataset.key) {
+          faSort.dir = faSort.dir === "asc" ? "desc" : "asc";
+        } else {
+          faSort.key = b.dataset.key;
+          faSort.dir = b.dataset.key === "name" || b.dataset.key === "position" ? "asc" : "desc";
+        }
+        render();
+      });
+    });
     var faSearchInput = container.querySelector("#fa-search");
     if (faSearchInput) {
       faSearchInput.addEventListener("input", function (e) {
@@ -309,18 +358,57 @@
       return;
     }
     var asking = askingPriceFor(p, team);
+    // Every offer counts toward the 3-per-season limit, and its amount is
+    // remembered so a later fresh offer this season must differ. One record
+    // covers the whole negotiation below, including any counter-offer round
+    // — those aren't a separate "offer" from the player's point of view.
+    S.recordContractOffer(p.id, offer.amount);
+
+    var lowballFloor = asking * 0.6;
+    if (offer.amount < lowballFloor) {
+      // Too far under asking to even negotiate — flat reject, no counter.
+      alert(p.name + " turned down your offer outright (" + U.formatMoney(offer.amount) + " over " + offer.years + " yr" +
+        (offer.years > 1 ? "s" : "") + ", asking " + U.formatMoney(asking) + "). That's too far under asking price to negotiate — try a much stronger offer.");
+      offer = { playerId: null, years: 2, amount: 0 };
+      render();
+      return;
+    }
+    if (offer.amount < asking) {
+      // Negotiation zone (60%-100% of asking): the AI always counters
+      // instead of rolling a flat reject chance — see the forced
+      // js/negotiationModal.js pop-up this triggers.
+      var counterAmount = Math.round(offer.amount + (asking - offer.amount) * (0.55 + Math.random() * 0.25));
+      openContractCounter(p, team, mode, asking, offer.amount, offer.years, counterAmount);
+      return;
+    }
+
+    // At or above asking price: same small flat-reject chance as before.
     var rejectChance = U.contractRejectChance(asking, offer.amount, offer.years);
     var rejected = Math.random() < rejectChance;
-    // Every offer counts toward the 3-per-season limit, and its amount is
-    // remembered so a later offer this season must differ — whether or not
-    // this particular offer is accepted.
-    S.recordContractOffer(p.id, offer.amount);
     if (rejected) {
       alert(p.name + " turned down your offer (" + U.formatMoney(offer.amount) + " over " + offer.years + " yr" + (offer.years > 1 ? "s" : "") +
         ", asking " + U.formatMoney(asking) + "). Try sweetening the deal.");
+      offer = { playerId: null, years: 2, amount: 0 };
+      render();
       return;
     }
-    var patch = { contractYears: offer.years, salary: offer.amount };
+    finalizeContract(p, team, mode, offer.amount, offer.years);
+  }
+
+  // Applies an agreed-upon contract, whether reached directly or after a
+  // counter-offer round — the one place that actually signs/re-signs the
+  // player. Re-checks cap space against the FINAL amount, since a
+  // counter-offer round can land on a higher number than what originally
+  // passed the cap check in sendOffer().
+  function finalizeContract(p, team, mode, amount, years) {
+    var space = S.capSpace(selectedTeamId) + (mode === "resign" ? (p.salary || 0) : 0);
+    if (amount > space) {
+      alert("Not enough cap space to close that deal (needs " + U.formatMoney(amount) + ", have " + U.formatMoney(space) + "). The offer falls through.");
+      offer = { playerId: null, years: 2, amount: 0 };
+      render();
+      return;
+    }
+    var patch = { contractYears: years, salary: amount };
     if (mode === "sign") {
       patch.teamId = selectedTeamId;
       patch.eligibleDivisions = null; // once signed, a breakout rookie's division restriction is lifted permanently
@@ -328,9 +416,54 @@
     S.updatePlayer(p.id, patch);
     S.addSigning({ teamId: selectedTeamId, playerId: p.id, playerName: p.name, mode: mode, salary: patch.salary, years: patch.contractYears });
     offer = { playerId: null, years: 2, amount: 0 };
-    alert(p.name + " agreed to " + U.formatMoney(offer.amount || patch.salary) + " over " + patch.contractYears + " yr" + (patch.contractYears > 1 ? "s" : "") + "!");
+    alert(p.name + " agreed to " + U.formatMoney(amount) + " over " + years + " yr" + (years > 1 ? "s" : "") + "!");
     render();
     if (window.PHLApp) window.PHLApp.refresh();
+  }
+
+  // Opens the forced counter-offer modal (js/negotiationModal.js) and wires
+  // up the three choices the user has: counter back with a new number,
+  // resubmit the original offer as a final take-it-or-leave-it, or drop the
+  // offer entirely.
+  function openContractCounter(p, team, mode, asking, originalOffer, years, counterAmount) {
+    window.PHLNegotiationModal.showContractCounter({
+      playerName: p.name,
+      asking: asking,
+      originalOffer: originalOffer,
+      counterOffer: counterAmount,
+      years: years,
+      onCounterBack: function (finalAmount) {
+        resolveContractRound2(p, team, mode, counterAmount, finalAmount, years);
+      },
+      onKeepOriginal: function () {
+        resolveContractRound2(p, team, mode, counterAmount, originalOffer, years);
+      },
+      onDrop: function () {
+        offer = { playerId: null, years: 2, amount: 0 };
+        render();
+      },
+    });
+  }
+
+  // Bounded round-2 resolution: meet or beat the AI's counter and the deal
+  // is automatically done; come in under it and it's one final reject-chance
+  // roll (using the counter amount as the new reference asking price) — no
+  // further rounds after this either way.
+  function resolveContractRound2(p, team, mode, counterAmount, finalAmount, years) {
+    if (finalAmount >= counterAmount) {
+      finalizeContract(p, team, mode, finalAmount, years);
+      return;
+    }
+    var rejectChance = U.contractRejectChance(counterAmount, finalAmount, years);
+    var rejected = Math.random() < rejectChance;
+    if (rejected) {
+      alert(p.name + " turned down your final offer (" + U.formatMoney(finalAmount) + " over " + years + " yr" + (years > 1 ? "s" : "") +
+        ", they'd countered at " + U.formatMoney(counterAmount) + "). Negotiations end here for now.");
+      offer = { playerId: null, years: 2, amount: 0 };
+      render();
+      return;
+    }
+    finalizeContract(p, team, mode, finalAmount, years);
   }
 
   window.PHLContracts = { render: render, askingPriceFor: askingPriceFor };

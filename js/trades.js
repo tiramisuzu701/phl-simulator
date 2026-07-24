@@ -14,7 +14,16 @@
   var S = window.PHLState;
   var U = window.PHLUtil;
   var container = null;
-  var view = { partnerId: null, mine: [], theirs: [], subTab: "propose" };
+  var view = { partnerId: null, mine: [], theirs: [], subTab: "propose", declinedCounterSignature: null };
+
+  // Identifies the exact package currently selected (partner + both sides'
+  // player sets) so a counter-offer that the user declines via "Offer a
+  // Different Player Instead" doesn't just loop forever if they re-propose
+  // the identical package unchanged — see proposeTrade()'s counter-offer
+  // branch below, which is bounded to one round per unique package.
+  function packageSignature() {
+    return view.partnerId + "|" + view.mine.slice().sort().join(",") + "|" + view.theirs.slice().sort().join(",");
+  }
 
   // A simplified, transparent trade-value estimate: current ability +
   // unrealized upside, discounted by how much cap room they eat, boosted
@@ -32,8 +41,13 @@
     return players.reduce(function (sum, p) { return sum + tradeValue(p); }, 0);
   }
 
+  // Trade partners are restricted to the user's own division — same
+  // convention already used by aiProposeTradesToUser() and aiRunTrades() in
+  // js/trades.js/js/aiManager.js, now applied to the user-facing partner
+  // dropdown too, so the whole trade system stays in-division everywhere.
   function otherTeams(myTeamId) {
-    return S.getTeams().filter(function (t) { return t.id !== myTeamId; })
+    var myTeam = S.getTeam(myTeamId);
+    return S.getTeams().filter(function (t) { return t.id !== myTeamId && (!myTeam || t.division === myTeam.division); })
       .sort(function (a, b) { return a.name.localeCompare(b.name); });
   }
 
@@ -197,6 +211,7 @@
       view.partnerId = e.target.value;
       view.mine = [];
       view.theirs = [];
+      view.declinedCounterSignature = null;
       render();
     });
     container.querySelectorAll('input[type="checkbox"][data-side]').forEach(function (cb) {
@@ -212,6 +227,7 @@
     if (clearBtn) clearBtn.addEventListener("click", function () {
       view.mine = [];
       view.theirs = [];
+      view.declinedCounterSignature = null;
       render();
     });
     var proposeBtn = container.querySelector('[data-action="propose-trade"]');
@@ -298,13 +314,76 @@
     // gets back; a little randomness keeps the threshold from being a
     // perfectly exploitable fixed number.
     var threshold = 0.88 + (Math.random() * 0.08 - 0.04);
-    var accepted = giveValue >= getValue * threshold;
+    var requiredValue = getValue * threshold;
+    var accepted = giveValue >= requiredValue;
     if (!accepted) {
+      var gap = requiredValue - giveValue;
+      var closeEnough = gap <= requiredValue * 0.3;
+      var signature = packageSignature();
+      var alreadyCounteredThisPackage = view.declinedCounterSignature === signature;
+      var sweetener = (closeEnough && !alreadyCounteredThisPackage) ?
+        findSweetener(myTeamId, partnerId, view.mine, mine, theirs, gap) : null;
+      if (sweetener) {
+        window.PHLNegotiationModal.showTradeCounter({
+          aiTeamName: S.getTeam(partnerId).name,
+          giveValue: giveValue,
+          getValue: getValue,
+          sweetenerName: sweetener.name,
+          sweetenerBlurb: sweetener.position + ", " + sweetener.overall + " OVR",
+          onAcceptCounter: function () {
+            finalizeTrade(myTeamId, partnerId, mine.concat([sweetener]), theirs);
+          },
+          onCounterBack: function () {
+            // Bounded to one round per unique package — see
+            // packageSignature(). The user picks a different sweetener (or
+            // a whole different package) themselves back in the builder.
+            view.declinedCounterSignature = signature;
+            render();
+          },
+          onDrop: function () {
+            view.declinedCounterSignature = signature;
+            render();
+          },
+        });
+        return;
+      }
       alert(S.getTeam(partnerId).name + " turned down the trade — they want more value coming back. " +
         "You're offering about " + giveValue + " in value for about " + getValue + ".");
       return;
     }
 
+    finalizeTrade(myTeamId, partnerId, mine, theirs);
+  }
+
+  // When a trade is rejected but "close enough" (within 30% of the value
+  // the AI needs — see proposeTrade), look for the cheapest-trade-value
+  // legal player on the user's roster — not already part of the offer,
+  // NMC-free, eligible for the partner's division, and one that keeps both
+  // rosters roster-minimum/goalie-max/cap legal — that would push the
+  // package over the acceptance threshold if added to "mine". Returns null
+  // if no single player can close the gap.
+  function findSweetener(myTeamId, partnerId, mineIds, minePlayers, theirsPlayers, neededExtraValue) {
+    var partnerDiv = S.getTeam(partnerId).division;
+    var partnerCapSpace = S.capForTeam(partnerId) - (S.capUsed(partnerId) - sumValue.salary(theirsPlayers) + sumValue.salary(minePlayers));
+    var candidates = S.getRoster(myTeamId).filter(function (p) {
+      if (mineIds.indexOf(p.id) !== -1) return false;
+      if (p.nmc) return false;
+      if (!S.meetsOverallCap(p.overall, partnerDiv)) return false;
+      if (!S.wouldMeetRosterMinimum(myTeamId, mineIds.concat([p.id]), theirsPlayers)) return false;
+      if (!S.wouldMeetGoalieMax(partnerId, theirsPlayers.map(function (t) { return t.id; }), minePlayers.concat([p]))) return false;
+      if ((p.salary || 0) > partnerCapSpace) return false;
+      return true;
+    });
+    candidates.sort(function (a, b) { return tradeValue(a) - tradeValue(b); });
+    for (var i = 0; i < candidates.length; i++) {
+      if (tradeValue(candidates[i]) >= neededExtraValue) return candidates[i];
+    }
+    return null;
+  }
+
+  // The one place that actually executes an agreed trade, whether reached
+  // directly or after the counter-offer sweetener above is accepted.
+  function finalizeTrade(myTeamId, partnerId, mine, theirs) {
     mine.forEach(function (p) { S.updatePlayer(p.id, { teamId: partnerId }); });
     theirs.forEach(function (p) { S.updatePlayer(p.id, { teamId: myTeamId }); });
     S.addTrade({
@@ -326,6 +405,7 @@
     }
     view.mine = [];
     view.theirs = [];
+    view.declinedCounterSignature = null;
     render();
     if (window.PHLApp) window.PHLApp.refresh();
   }

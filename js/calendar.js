@@ -58,6 +58,21 @@
         return (team ? team.name : "Your team") + " is " + U.formatMoney(cap.userOverCap.overBy) +
           " over the salary cap. Release a player in the Contracts tab before advancing.";
       }
+      // Every team must field a legal 2F/2D/1G roster throughout the regular
+      // season and playoffs — only the off-season is a rebuilding window
+      // (see js/state.js ROSTER_MIN / rosterMeetsMinimum). AI teams get
+      // auto-signed up to compliance for free (js/aiManager.js
+      // forceFillRosterMinimum, even down to whatever's cheapest and legally
+      // eligible); the human GM's own team is never signed for automatically
+      // — it's reported back here and Advance Week is blocked until the
+      // user fixes it themselves in Contracts.
+      var rosterCheck = AI.enforceRosterMinimumForAllTeams();
+      if (rosterCheck.userBelowMinimum) {
+        var myTeam = S.getTeam(rosterCheck.userBelowMinimum.teamId);
+        return (myTeam ? myTeam.name : "Your team") + " is below the required " + S.ROSTER_MIN.F + "F/" +
+          S.ROSTER_MIN.D + "D/" + S.ROSTER_MIN.G + "G, " + S.ROSTER_MIN.total +
+          "-player roster minimum. Sign a free agent in the Contracts tab before advancing.";
+      }
     }
     // Advance Week is the one button that runs the whole season — it is NOT
     // gated on the user simming their own game(s) first. "Sim My Game" on
