@@ -200,7 +200,7 @@
 
   function addGeneratedPlayer(teamId, position) {
     var overall = U.randInt(52, 88);
-    var potential = U.clamp(overall + U.randInt(0, 14), overall, 99);
+    var potential = U.rollPotential(overall);
     var archetype = U.randomArchetype(position);
     var age = U.generateStartingAge();
     var player = {

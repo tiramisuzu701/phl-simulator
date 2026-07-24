@@ -191,7 +191,15 @@
     // a playoff series win now also grants a one-time manual +1 overall
     // pick (see js/playoffs.js onSeriesWon), so automatic growth alone is
     // no longer the only way a player climbs toward their potential.
-    var maxStep = U.clamp(Math.round(gap * 0.22), 1, 5);
+    //
+    // Slowed further (0.22 -> 0.15, ceiling 5 -> 4) alongside the 88+
+    // Potential floor (see U.rollPotential) — with everyone now carrying a
+    // real ceiling in the 90s, automatic growth alone closing that gap at
+    // the old pace would let rosters approach max potential too easily.
+    // The intent is for reaching a player's ceiling to take real investment
+    // (playoff-series overall picks, patience, division promotion) rather
+    // than happening for free just by advancing weeks.
+    var maxStep = U.clamp(Math.round(gap * 0.15), 1, 4);
     var growth = Math.round(maxStep * ageFactor);
     if (growth <= 0) growth = 1; // any real development window guarantees at least +1
 
@@ -244,9 +252,12 @@
     return retired;
   }
 
-  // Breakout rookies: lower-overall, wide-spread-potential young players
-  // that enter free agency each season. Restricted (at first signing only)
-  // to Prospect — occasionally Contender — never straight to Pro.
+  // Breakout rookies: lower-overall young players that enter free agency
+  // each season — their CURRENT skill is deliberately raw (Overall 40-65),
+  // but every one of them still carries the league-wide 88+ Potential floor
+  // (see U.rollPotential), leaning toward the 90s. What varies rookie to
+  // rookie is how far they currently are from that ceiling, not whether
+  // they have one.
   function generateRookieClass() {
     var settings = S.getSettings();
     var count = settings.rookiesPerSeason || 10;
@@ -255,11 +266,7 @@
       var roll = Math.random();
       var position = roll < 0.45 ? "F" : roll < 0.8 ? "D" : "G";
       var overall = U.randInt(40, 65);
-      var potentialRoll = Math.random();
-      var potential;
-      if (potentialRoll < 0.15) potential = U.randInt(85, 97); // boom-or-bust gem
-      else if (potentialRoll < 0.5) potential = U.clamp(overall + U.randInt(15, 30), overall, 90);
-      else potential = U.clamp(overall + U.randInt(2, 14), overall, 80);
+      var potential = U.rollPotential(overall);
       var archetype = U.randomArchetype(position);
       var eligibleDivisions = Math.random() < (settings.rookieContenderChance || 0.25)
         ? ["prospect", "contender"]

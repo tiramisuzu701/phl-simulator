@@ -63,6 +63,25 @@
     return arr[randInt(0, arr.length - 1)];
   }
 
+  // League-wide floor: everyone entering the pool (real roster sweep,
+  // breakout rookies, sample-roster test data) can hit at least a 88
+  // Potential — the fictional conceit being that with enough reps, any
+  // player in this pool can reach a D1-caliber ceiling. The distribution
+  // still leans toward the 90s rather than clustering at the 88 floor —
+  // taking the max of two rolls skews the result upward (mean ~2/3 of the
+  // way up the range) while still leaving room for an occasional player who
+  // tops out right at 88. A player's potential can never fall below their
+  // current Overall, so an already-elite player's ceiling only ever gets
+  // pulled UP toward 99 by this floor, never down.
+  var POTENTIAL_FLOOR = 88;
+  function rollPotential(overall) {
+    var floor = Math.max(POTENTIAL_FLOOR, overall || 0);
+    if (floor >= 99) return 99;
+    var span = 99 - floor;
+    var skewed = Math.max(Math.random(), Math.random()); // biased toward 1
+    return clamp(floor + Math.round(skewed * span), floor, 99);
+  }
+
   // Weighted pick: items = [{item, weight}]
   function weightedPick(items) {
     var total = 0;
@@ -414,6 +433,8 @@
     clamp: clamp,
     randInt: randInt,
     pick: pick,
+    rollPotential: rollPotential,
+    POTENTIAL_FLOOR: POTENTIAL_FLOOR,
     weightedPick: weightedPick,
     poisson: poisson,
     round1: round1,
