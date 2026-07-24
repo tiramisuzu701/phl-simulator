@@ -112,20 +112,25 @@ em { color: var(--text-secondary); font-style: normal; }
   padding: 0.2rem 0.4rem 1.1rem;
 }
 .sidebar-brand-mark {
-  background: linear-gradient(135deg, var(--glow-1), var(--glow-2));
   color: white;
   font-weight: 700;
-  padding: 0.35rem 0.6rem;
   border-radius: 8px;
   letter-spacing: 0.03em;
   font-size: 0.9rem;
-  box-shadow: 0 0 18px -4px var(--glow-1-soft);
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.sidebar-brand-mark .brand-logo-img { height: 1.5rem; width: auto; display: block; }
+/* The real logo is a standalone shield crest (its own red/white/blue
+   artwork), so it sits on its own rather than inside the gradient badge box
+   — that box is reserved for the plain-text fallback below. */
+.sidebar-brand-mark .brand-logo-img { height: 2.3rem; width: auto; display: block; }
 .sidebar-brand-mark .brand-logo-fallback-text { display: none; }
+.sidebar-brand-mark.brand-logo-fallback {
+  background: linear-gradient(135deg, var(--glow-1), var(--glow-2));
+  padding: 0.35rem 0.6rem;
+  box-shadow: 0 0 18px -4px var(--glow-1-soft);
+}
 .sidebar-brand-mark.brand-logo-fallback .brand-logo-img { display: none; }
 .sidebar-brand-mark.brand-logo-fallback .brand-logo-fallback-text { display: inline; }
 .sidebar-brand-text {
@@ -908,18 +913,23 @@ select option {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--glow-1), var(--glow-2));
   color: white;
   font-weight: 700;
-  padding: 0.4rem 0.7rem;
   border-radius: 8px;
   letter-spacing: 0.03em;
   font-size: 0.95rem;
   margin-bottom: 0.85rem;
+}
+/* The real logo is a standalone shield crest, so it sits on its own rather
+   than inside the gradient badge box — that box is reserved for the
+   plain-text fallback below. */
+.wizard-brand-mark .brand-logo-img { height: 2.6rem; width: auto; display: block; }
+.wizard-brand-mark .brand-logo-fallback-text { display: none; }
+.wizard-brand-mark.brand-logo-fallback {
+  background: linear-gradient(135deg, var(--glow-1), var(--glow-2));
+  padding: 0.4rem 0.7rem;
   box-shadow: 0 0 22px -4px var(--glow-1-soft);
 }
-.wizard-brand-mark .brand-logo-img { height: 1.7rem; width: auto; display: block; }
-.wizard-brand-mark .brand-logo-fallback-text { display: none; }
 .wizard-brand-mark.brand-logo-fallback .brand-logo-img { display: none; }
 .wizard-brand-mark.brand-logo-fallback .brand-logo-fallback-text { display: inline; }
 .wizard-header h1 {
