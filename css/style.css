@@ -120,7 +120,14 @@ em { color: var(--text-secondary); font-style: normal; }
   letter-spacing: 0.03em;
   font-size: 0.9rem;
   box-shadow: 0 0 18px -4px var(--glow-1-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
+.sidebar-brand-mark .brand-logo-img { height: 1.5rem; width: auto; display: block; }
+.sidebar-brand-mark .brand-logo-fallback-text { display: none; }
+.sidebar-brand-mark.brand-logo-fallback .brand-logo-img { display: none; }
+.sidebar-brand-mark.brand-logo-fallback .brand-logo-fallback-text { display: inline; }
 .sidebar-brand-text {
   font-weight: 600;
   font-size: 0.8rem;
@@ -885,7 +892,9 @@ select option {
 .wizard-shell { width: 100%; max-width: 720px; }
 .wizard-header { text-align: center; margin-bottom: 1.75rem; }
 .wizard-brand-mark {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: linear-gradient(135deg, var(--glow-1), var(--glow-2));
   color: white;
   font-weight: 700;
@@ -896,6 +905,10 @@ select option {
   margin-bottom: 0.85rem;
   box-shadow: 0 0 22px -4px var(--glow-1-soft);
 }
+.wizard-brand-mark .brand-logo-img { height: 1.7rem; width: auto; display: block; }
+.wizard-brand-mark .brand-logo-fallback-text { display: none; }
+.wizard-brand-mark.brand-logo-fallback .brand-logo-img { display: none; }
+.wizard-brand-mark.brand-logo-fallback .brand-logo-fallback-text { display: inline; }
 .wizard-header h1 {
   margin: 0 0 0.35rem;
   font-size: 1.6rem;
