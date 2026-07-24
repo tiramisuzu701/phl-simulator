@@ -157,7 +157,42 @@
     var cap = currentPhaseCap(sd);
     if (cap != null && player.overall > cap) return; // above this phase's division overall cutoff — blocked
     if (player.position === "G" && !S.wouldMeetGoalieMax(teamId, [], [player])) return; // already at the goalie sub-cap
-    S.updatePlayer(playerId, { teamId: teamId, startupDraftPool: false, contractYears: 3 });
+    // Draft picks sign a cheap, short "entry contract" rather than their
+    // full market value — one SEASON PLAYED at 70% of their actual asking
+    // price (the same division-adjusted U.contractAskingPrice() number
+    // shown everywhere else in the UI — e.g. the Contracts tab's "Asking
+    // Price" column), instead of the old 3-year full-price deal. This is
+    // what actually keeps a fresh Startup Draft roster affordable under a
+    // division's cap (Prospect's is the tightest), especially since every
+    // real-pool player already carries a full-price tag.
+    //
+    // IMPORTANT: this must be contractAskingPrice(), not the player's raw
+    // starting-data `salary` field. That raw field is a flat, pre-division
+    // number (plain salaryAsking(overall, potential), no division-tier
+    // adjustment) — it was previously used here directly, which meant a
+    // Prospect pick's "70% off" was computed against a bigger number than
+    // what Prospect's own 0.65x division-tier factor (and the player's
+    // negotiating quirk) says they're actually worth in that division. The
+    // result: entry contracts could land ABOVE the player's true asking
+    // price instead of 30% below it, undermining the whole point of this
+    // feature. Pricing off contractAskingPrice() keeps the discount
+    // anchored to the number the user actually sees and compares against.
+    var division = S.getDivision(S.getTeam(teamId).division);
+    var askingPrice = U.contractAskingPrice(player, division ? division.tier : null);
+    var entrySalary = Math.max(U.SALARY_MIN, Math.round((askingPrice * 0.7) / 500) * 500);
+    //
+    // contractYears is set to 2, not 1: every contract's year-count ticks
+    // down once per off-season (js/stats.js ageAndDeclinePlayers, called
+    // from the LAST week of the off-season), and the Startup Draft always
+    // happens entirely inside a save's very first off-season, before any
+    // games are played. A "1-year" entry deal would tick straight to 0 at
+    // that first off-season's own final week — releasing the entire
+    // league's just-drafted rosters before a single regular-season game
+    // was played. Starting at 2 absorbs that one pre-season tick, so the
+    // player actually plays their whole first season and hits free agency
+    // at the off-season that follows it — a genuine one full season of use,
+    // not zero.
+    S.updatePlayer(playerId, { teamId: teamId, startupDraftPool: false, contractYears: 2, salary: entrySalary });
     sd.picks.push({
       pickNumber: sd.picks.length + 1,
       phase: sd.phase,
