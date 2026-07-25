@@ -53,6 +53,13 @@
     // overallCap is the highest player overall allowed while rostered in
     // that division (enforced at every draft/trade/promotion/signing —
     // see js/state.js meetsOverallCap); null means uncapped (Pro).
+    // overallFloor is the mirror image — the LOWEST player overall allowed
+    // while rostered in that division (enforced at the same checkpoints —
+    // see js/state.js meetsOverallFloor); null means no floor (Prospect,
+    // the entry-level division everyone starts from). Added so a raw
+    // ~60-overall Prospect-caliber player can no longer get drafted or
+    // signed straight into Contender/Pro — realistically, teams at those
+    // tiers only carry players who are already Contender/Pro-caliber.
     // salaryCapMax is the ceiling a team's effective cap can scale up to
     // based on last season's win rate (see js/state.js capForTeam) — the
     // salaryCap value below stays the fixed base a team starts a fresh
@@ -62,9 +69,9 @@
     // the steeper Prospect-specific pricing cut in js/utils.js
     // divisionTierFactor(), which is what actually fixes Prospect contracts
     // eating a disproportionate share of its (already tiny) cap.
-    { id: "prospect", name: "Prospect", tier: 1, salaryCap: 800000, salaryCapMax: 1200000, overallCap: 79, gamesPerWeek: 3, playoff: { teams: 10, byes: 6 } },
-    { id: "contender", name: "Contender", tier: 2, salaryCap: 1600000, salaryCapMax: 2560000, overallCap: 91, gamesPerWeek: 3, playoff: { teams: 8, byes: 8 } },
-    { id: "pro", name: "Pro", tier: 3, salaryCap: 3200000, salaryCapMax: 4320000, overallCap: null, gamesPerWeek: 2, playoff: { teams: 4, byes: 4 } },
+    { id: "prospect", name: "Prospect", tier: 1, salaryCap: 800000, salaryCapMax: 1200000, overallCap: 79, overallFloor: null, gamesPerWeek: 3, playoff: { teams: 10, byes: 6 } },
+    { id: "contender", name: "Contender", tier: 2, salaryCap: 1600000, salaryCapMax: 2560000, overallCap: 91, overallFloor: 70, gamesPerWeek: 3, playoff: { teams: 8, byes: 8 } },
+    { id: "pro", name: "Pro", tier: 3, salaryCap: 3200000, salaryCapMax: 4320000, overallCap: null, overallFloor: 83, gamesPerWeek: 2, playoff: { teams: 4, byes: 4 } },
   ];
 
   // Real PHL Season 4 roster sweep (Pro + Contender + Prospect, every

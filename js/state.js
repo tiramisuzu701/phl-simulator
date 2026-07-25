@@ -71,6 +71,9 @@
         div.gamesPerWeek = starterDiv ? starterDiv.gamesPerWeek : 2;
       }
       if (div.overallCap === undefined) div.overallCap = starterDiv ? starterDiv.overallCap : null;
+      // Backfill for saves created before division overall floors existed
+      // (see js/starterData.js divisions / meetsOverallFloor below).
+      if (div.overallFloor === undefined) div.overallFloor = starterDiv ? starterDiv.overallFloor : null;
       if (div.salaryCapMax == null) div.salaryCapMax = starterDiv ? starterDiv.salaryCapMax : div.salaryCap;
     });
     // Backfill logoUrl on older saves (from before real PHL logos were
@@ -583,17 +586,21 @@
     save();
   }
 
-  // ---------------- Overall cutoffs (division ceilings) ------------------
+  // ---------------- Overall cutoffs (division floors & ceilings) ---------
   // A division's overallCap (see js/starterData.js) is the highest overall
   // a player may have while rostered/drafted there — null means uncapped
-  // (Pro division). Enforced as a blocking guard at every division-entry
-  // point: Startup Draft picks, trades, promotions/call-ups, and free-agent
-  // signings, for both the user and AI teams (see js/trades.js,
-  // js/contracts.js, js/promotions.js, js/aiManager.js, js/startupDraft.js).
-  // Growth (js/stats.js developPlayer, js/playoffs.js series-win bumps) is
-  // NOT capped — a player who crosses the cutoff mid-season finishes that
-  // season on the roster; see releasePlayersAboveOverallCutoff below for
-  // what happens to them once the off-season begins.
+  // (Pro division). overallFloor is the mirror image: the lowest overall
+  // allowed there — null means no floor (Prospect). Both are enforced as
+  // blocking guards at every division-entry point: Startup Draft picks,
+  // trades, promotions/call-ups, and free-agent signings, for both the
+  // user and AI teams (see js/trades.js, js/contracts.js, js/promotions.js,
+  // js/aiManager.js, js/startupDraft.js).
+  // Growth/decline (js/stats.js developPlayer/ageAndDeclinePlayers,
+  // js/playoffs.js series-win bumps) is NOT gated by either bound — a
+  // player who crosses the ceiling (grows too good) or drops below the
+  // floor (declines with age) mid-season finishes that season on the
+  // roster; see releasePlayersOutsideOverallRange below for what happens
+  // to them once the off-season begins.
   function overallCapForDivision(divisionId) {
     var div = getDivision(divisionId);
     return div && div.overallCap != null ? div.overallCap : null;
@@ -603,14 +610,28 @@
     if (cap == null) return true;
     return overall <= cap;
   }
-  // Force-releases any rostered player who's currently above their
-  // division's overall cutoff — called once each time the off-season
-  // begins (see js/calendar.js runPlayoffsWeek). A player can grow past
-  // the cutoff mid-season and keep playing (see developPlayer/onSeriesWon),
-  // but a team has to let them walk once the season that happened in ends.
-  // NMC does NOT protect against this — it's a forced compliance cut, not
-  // a voluntary roster move. Returns the list of released players.
-  function releasePlayersAboveOverallCutoff() {
+  function overallFloorForDivision(divisionId) {
+    var div = getDivision(divisionId);
+    return div && div.overallFloor != null ? div.overallFloor : null;
+  }
+  function meetsOverallFloor(overall, divisionId) {
+    var floor = overallFloorForDivision(divisionId);
+    if (floor == null) return true;
+    return overall >= floor;
+  }
+  // Force-releases any rostered player who's currently outside their
+  // division's allowed overall range (above the ceiling OR below the
+  // floor) — called once each time the off-season begins (see
+  // js/calendar.js runPlayoffsWeek). A player can grow past the ceiling or
+  // decline below the floor mid-season and keep playing (see
+  // developPlayer/onSeriesWon and ageAndDeclinePlayers), but a team has to
+  // let them walk once the season that happened in ends. NMC does NOT
+  // protect against this — it's a forced compliance cut, not a voluntary
+  // roster move. Returns the list of released players. Exported as
+  // releasePlayersAboveOverallCutoff for backward compatibility with
+  // existing callers (js/calendar.js) — the name predates the floor half
+  // of this check, but the behavior now covers both directions.
+  function releasePlayersOutsideOverallRange() {
     var released = [];
     data.players.forEach(function (p) {
       if (!p.teamId || p.retired) return;
@@ -620,6 +641,10 @@
         released.push({ player: p, teamId: p.teamId });
         addRelease({ teamId: p.teamId, playerId: p.id, playerName: p.name, reason: "overall-cutoff" });
         p.teamId = null;
+      } else if (!meetsOverallFloor(p.overall, team.division)) {
+        released.push({ player: p, teamId: p.teamId });
+        addRelease({ teamId: p.teamId, playerId: p.id, playerName: p.name, reason: "overall-floor" });
+        p.teamId = null;
       }
     });
     if (released.length) save();
@@ -627,9 +652,14 @@
   }
 
   // ---------------- No-Movement Clause (NMC) ------------------------------
-  // A manually-toggled flag (p.nmc) the user sets from Team Management to
-  // protect up to NMC_MAX_PER_TEAM players from being released, traded, or
-  // promoted away. AI teams don't self-assign NMCs.
+  // A flag (p.nmc) negotiated INTO a contract at sign/re-sign/extension
+  // time (see js/contracts.js) — not a free-standing toggle — that
+  // protects up to NMC_MAX_PER_TEAM of the user's players from being
+  // released, traded, or promoted away for the life of that deal. It's
+  // cleared automatically when the contract it belongs to ends (expiry —
+  // see js/stats.js ageAndDeclinePlayers) since it isn't a standing right
+  // that survives into the player's next deal. AI teams don't self-assign
+  // NMCs.
   var NMC_MAX_PER_TEAM = 2;
   function nmcCountForTeam(teamId) {
     return getRoster(teamId).filter(function (p) { return !!p.nmc; }).length;
@@ -706,7 +736,12 @@
     snapshotTeamRecordsForCap: snapshotTeamRecordsForCap,
     overallCapForDivision: overallCapForDivision,
     meetsOverallCap: meetsOverallCap,
-    releasePlayersAboveOverallCutoff: releasePlayersAboveOverallCutoff,
+    overallFloorForDivision: overallFloorForDivision,
+    meetsOverallFloor: meetsOverallFloor,
+    // Kept under its original name for backward compatibility with
+    // existing callers (js/calendar.js) — see releasePlayersOutsideOverallRange
+    // above, which now handles both the ceiling AND the floor.
+    releasePlayersAboveOverallCutoff: releasePlayersOutsideOverallRange,
     NMC_MAX_PER_TEAM: NMC_MAX_PER_TEAM,
     nmcCountForTeam: nmcCountForTeam,
     isTransactionWindowOpen: isTransactionWindowOpen,

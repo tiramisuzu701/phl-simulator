@@ -48,6 +48,7 @@
         var candidates = S.getFreeAgents().filter(function (p) {
           if (!isEligible(p, team.division)) return false;
           if (!S.meetsOverallCap(p.overall, team.division)) return false;
+          if (!S.meetsOverallFloor(p.overall, team.division)) return false;
           if (p.position === "G" && counts.G >= S.GOALIE_MAX) return false;
           var asking = U.contractAskingPrice(p, division ? division.tier : null);
           if (asking > space) return false;
@@ -267,6 +268,7 @@
         if (p.position !== neededPos) return false;
         if (!isEligible(p, team.division)) return false;
         if (!S.meetsOverallCap(p.overall, team.division)) return false;
+        if (!S.meetsOverallFloor(p.overall, team.division)) return false;
         if (p.position === "G" && counts.G >= S.GOALIE_MAX) return false;
         return true;
       });

@@ -94,7 +94,7 @@
         var newSalary = fee; // same valuation formula drives both
         var totalCost = fee + newSalary;
         var affordable = totalCost <= space;
-        var withinCap = S.meetsOverallCap(p.overall, team.division);
+        var withinCap = S.meetsOverallCap(p.overall, team.division) && S.meetsOverallFloor(p.overall, team.division);
         var goalieOk = p.position !== "G" || S.wouldMeetGoalieMax(team.id, [], [p]);
         html += "<tr><td>" + U.escapeHtml(p.name) + "</td><td>" + p.position + "</td><td>" + U.escapeHtml(p.archetype || "") + "</td><td><strong>" + p.overall + "</strong></td><td>" + p.potential + "</td>";
         html += "<td>" + U.escapeHtml(pt ? pt.name : "?") + " <span class=\"muted\">(" + U.escapeHtml(S.getDivision(pt.division).name) + ")</span></td>";
@@ -104,7 +104,7 @@
         } else if (p.nmc) {
           html += '<td><span class="pill pill-warn" title="No-Movement Clause">NMC protected</span></td></tr>';
         } else if (!withinCap) {
-          html += '<td><span class="pill pill-warn" title="Above this division\'s overall cutoff">Exceeds overall cutoff</span></td></tr>';
+          html += '<td><span class="pill pill-warn" title="Outside this division\'s allowed overall range">Outside overall range</span></td></tr>';
         } else if (!goalieOk) {
           html += '<td><span class="pill pill-warn" title="Already carrying the max ' + S.GOALIE_MAX + ' goalies">Goalie cap reached</span></td></tr>';
         } else if (!affordable) {
@@ -180,6 +180,11 @@
     if (!S.meetsOverallCap(player.overall, toTeam.division)) {
       if (notify) alert(player.name + " (" + player.overall + " OVR) is above the " + S.getDivision(toTeam.division).name + " division's " +
         S.overallCapForDivision(toTeam.division) + " overall cutoff and can't be called up there.");
+      return false;
+    }
+    if (!S.meetsOverallFloor(player.overall, toTeam.division)) {
+      if (notify) alert(player.name + " (" + player.overall + " OVR) is below the " + S.getDivision(toTeam.division).name + " division's " +
+        S.overallFloorForDivision(toTeam.division) + " overall floor and isn't ready for that level yet.");
       return false;
     }
     var fee = callUpFee(player);

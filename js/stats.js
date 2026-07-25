@@ -245,6 +245,11 @@
         if (p.contractYears <= 0) {
           p.contractYears = 0;
           p.teamId = null; // hits free agency
+          // A No-Movement Clause is a term of the contract that just
+          // expired, not a standing right that follows the player into
+          // free agency — see js/contracts.js, where NMC is now something
+          // negotiated fresh into each new deal (not a free toggle).
+          p.nmc = false;
         }
       }
     });
@@ -253,11 +258,39 @@
   }
 
   // Breakout rookies: lower-overall young players that enter free agency
-  // each season — their CURRENT skill is deliberately raw (Overall 40-65),
-  // but every one of them still carries the league-wide 88+ Potential floor
-  // (see U.rollPotential), leaning toward the 90s. What varies rookie to
-  // rookie is how far they currently are from that ceiling, not whether
-  // they have one.
+  // each season — most are deliberately raw (Overall 40-65), but a small
+  // minority enter already Contender- or (more rarely) Pro-caliber, same
+  // as real free agency occasionally producing an immediate difference-
+  // maker rather than only projects. Every one of them still carries the
+  // league-wide 88+ Potential floor (see U.rollPotential), leaning toward
+  // the 90s — what varies rookie to rookie is how far they currently are
+  // from that ceiling, not whether they have one.
+  //
+  // The higher tiers aren't just flavor: Contender/Pro now have their own
+  // overall FLOORS (see js/state.js meetsOverallFloor / js/starterData.js
+  // divisions) — no player below 70 can be signed into Contender, none
+  // below 83 into Pro. Retirement permanently removes players from the
+  // pool over a long save (see ageAndDeclinePlayers below); without SOME
+  // ongoing supply at those higher bands, Contender and Pro would slowly
+  // starve of eligible free agents as their veterans age out, with the
+  // rookie pipeline only ever refilling Prospect. This keeps that supply
+  // trickling in — modestly (most rookies are still raw prospects).
+  var ROOKIE_TIERS = [
+    { key: "pro", chance: 0.08, min: 83, max: 90 }, // rare, ready-made Pro talent
+    { key: "contender", chance: 0.17, min: 70, max: 85 }, // Contender-caliber
+    { key: "raw", chance: 1, min: 40, max: 65 }, // the typical raw Prospect project
+  ];
+  function rollRookieTier() {
+    var roll = Math.random();
+    var acc = 0;
+    for (var i = 0; i < ROOKIE_TIERS.length; i++) {
+      acc += ROOKIE_TIERS[i].chance;
+      if (roll < acc || i === ROOKIE_TIERS.length - 1) {
+        var t = ROOKIE_TIERS[i];
+        return { key: t.key, overall: U.randInt(t.min, t.max) };
+      }
+    }
+  }
   function generateRookieClass() {
     var settings = S.getSettings();
     var count = settings.rookiesPerSeason || 10;
@@ -265,12 +298,35 @@
     for (var i = 0; i < count; i++) {
       var roll = Math.random();
       var position = roll < 0.45 ? "F" : roll < 0.8 ? "D" : "G";
-      var overall = U.randInt(40, 65);
+      var rolled = rollRookieTier();
+      var overall = rolled.overall;
       var potential = U.rollPotential(overall);
       var archetype = U.randomArchetype(position);
-      var eligibleDivisions = Math.random() < (settings.rookieContenderChance || 0.25)
-        ? ["prospect", "contender"]
-        : ["prospect"];
+      var eligibleDivisions;
+      if (rolled.key === "raw") {
+        // Historical "breakout rookie" flavor: raw prospects default to
+        // Prospect-only, with a chance of early Contender eligibility. At
+        // this tier's 40-65 overall range that chance never actually
+        // clears Contender's own floor (see js/state.js meetsOverallFloor)
+        // today, so it's effectively a no-op — kept floor-aware in case
+        // either range changes later, rather than silently always/never
+        // firing for an undocumented reason.
+        var contenderFloor = S.overallFloorForDivision("contender");
+        var meetsContenderFloor = contenderFloor == null || overall >= contenderFloor;
+        eligibleDivisions = (meetsContenderFloor && Math.random() < (settings.rookieContenderChance || 0.25))
+          ? ["prospect", "contender"]
+          : ["prospect"];
+      } else {
+        // Contender-/Pro-caliber tiers: no artificial division whitelist.
+        // Their overall can exceed Prospect's own ceiling (79), so hard-
+        // coding them to "prospect only" (like the raw tier above) could
+        // leave them eligible for NOTHING once that happens. Instead, let
+        // the normal per-division overall floor/ceiling gates (see
+        // js/state.js meetsOverallCap/meetsOverallFloor, enforced at every
+        // signing/trade/promotion checkpoint) decide what they qualify
+        // for, exactly like any other free agent.
+        eligibleDivisions = null;
+      }
       var rookieAge = U.generateRookieAge();
       var player = {
         name: U.randomGamertag(),

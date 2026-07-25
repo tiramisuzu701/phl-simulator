@@ -199,7 +199,20 @@
   }
 
   function addGeneratedPlayer(teamId, position) {
-    var overall = U.randInt(52, 88);
+    // Keep this dev/testing generator honest about the same division
+    // overall floor/ceiling every real roster move respects (see
+    // js/state.js meetsOverallCap/meetsOverallFloor) — otherwise a sample
+    // roster could hand a Pro team a sub-floor filler player that no real
+    // game action could ever have put there.
+    var team = S.getTeam(teamId);
+    var division = team ? team.division : null;
+    var lo = 52, hi = 88;
+    var floor = S.overallFloorForDivision(division);
+    var cap = S.overallCapForDivision(division);
+    if (floor != null) lo = Math.max(lo, floor);
+    if (cap != null) hi = Math.min(hi, cap);
+    if (lo > hi) { lo = floor != null ? floor : lo; hi = lo; } // degenerate range (e.g. dev override) — just pin to the floor
+    var overall = U.randInt(lo, hi);
     var potential = U.rollPotential(overall);
     var archetype = U.randomArchetype(position);
     var age = U.generateStartingAge();

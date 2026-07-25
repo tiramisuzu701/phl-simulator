@@ -9,6 +9,20 @@
  * the further you lowball them the more likely they turn it down (see
  * U.contractRejectChance). A rejected offer changes nothing — try again
  * with better terms, or move on.
+ *
+ * Three negotiation modes, all sharing the machinery above:
+ *  - "sign": a free agent joining the team fresh.
+ *  - "resign": a player whose deal is down to its final year (or already
+ *    expired) — negotiate a brand-new term that replaces it outright.
+ *  - "extend": a player who ISN'T yet up for renewal (2+ years still on
+ *    the books) — negotiate ADDITIONAL years on top of what's left, at a
+ *    premium (see extensionPremiumFactor), capped at MAX_CONTRACT_YEARS
+ *    total. This is the actual "lock them up early" lever.
+ *
+ * A No-Movement Clause is now something you negotiate INTO a deal (sign,
+ * resign, or extend) rather than a free toggle — it costs a real premium
+ * on top of asking price (see NMC_PREMIUM_FACTOR) and lasts exactly as
+ * long as the contract it's part of. See effectiveAskingFor.
  */
 (function () {
   "use strict";
@@ -17,9 +31,13 @@
   var container = null;
   var selectedTeamId = null;
   // Transient negotiation UI state — which player's offer panel is open,
-  // and the length/amount currently dialed in. Reset whenever a panel
-  // closes or a deal resolves.
-  var offer = { playerId: null, years: 2, amount: 0 };
+  // the length/amount currently dialed in, and whether a No-Movement
+  // Clause is on the table. Reset whenever a panel closes or a deal
+  // resolves (see resetOffer()).
+  var offer = { playerId: null, years: 2, amount: 0, nmc: false };
+  function resetOffer() {
+    offer = { playerId: null, years: 2, amount: 0, nmc: false };
+  }
   var faSearch = "";
   // Positional/column sorting for the Free Agents table — click a header to
   // sort by it, click again to flip direction. Mirrors the sortable-column
@@ -41,6 +59,50 @@
   function askingPriceFor(player, team) {
     var division = S.getDivision(team.division);
     return U.contractAskingPrice(player, division ? division.tier : null);
+  }
+
+  // A No-Movement Clause costs a real premium — you're asking a player to
+  // give up any say in being released, traded, or promoted away for the
+  // life of the deal, and they want to be paid for that security.
+  var NMC_PREMIUM_FACTOR = 1.15;
+
+  // Contracts top out at 5 years total, same ceiling a fresh signing
+  // already respects — an extension can only add up to whatever's left of
+  // that ceiling on top of the player's CURRENT remaining term.
+  var MAX_CONTRACT_YEARS = 5;
+  function maxExtendYearsFor(p) {
+    return Math.max(0, MAX_CONTRACT_YEARS - (p.contractYears || 0));
+  }
+  // Extending someone who isn't yet a free agent means buying out their
+  // (and the market's) future leverage before either of you has to test
+  // it — that costs extra, and the more years they'd already have played
+  // out before hitting the market, the bigger that premium is.
+  function extensionPremiumFactor(contractYearsRemaining) {
+    return 1 + U.clamp((contractYearsRemaining || 0) * 0.03, 0, 0.15);
+  }
+
+  // The number actually driving reject-chance/lowball/counter-offer math —
+  // base asking price, bumped for an early extension's premium and/or a
+  // requested No-Movement Clause. askingPriceFor() above stays the honest,
+  // un-bumped baseline shown everywhere else, so the user can always see
+  // exactly what each premium is adding on top of plain market value.
+  function effectiveAskingFor(p, team, mode, includeNmc) {
+    var asking = askingPriceFor(p, team);
+    if (mode === "extend") asking = Math.round(asking * extensionPremiumFactor(p.contractYears));
+    if (includeNmc) asking = Math.round(asking * NMC_PREMIUM_FACTOR);
+    return asking;
+  }
+
+  // Quick "how's this deal aging" read on a rostered player — not used for
+  // any negotiation math, just a hint for deciding whether they're worth
+  // locking up early (a team-friendly deal) or worth letting walk once
+  // their contract is up (an overpaid one already eating more cap than
+  // their current asking price justifies).
+  function contractValueOutlook(p, asking) {
+    if (!p.salary || !asking) return null;
+    if (p.salary < asking * 0.85) return { label: "Team-Friendly", cls: "pill-clinch" };
+    if (p.salary > asking * 1.15) return { label: "Overpaid", cls: "pill-warn" };
+    return null;
   }
 
   function render(el) {
@@ -65,7 +127,9 @@
 
     var html = '<div class="panel-header"><h2>Contracts &amp; Cap</h2></div>';
     html += '<p class="muted small">You can only manage contracts for the team you GM. Every other team signs, releases and re-signs on its own — and can never touch your roster. ' +
-      'Asking price reflects Overall/Potential, this season\'s actual performance, and the division\'s pay scale. Offer below it and there\'s a real chance the player says no.</p>';
+      'Asking price reflects Overall/Potential, this season\'s actual performance, and the division\'s pay scale. Offer below it and there\'s a real chance the player says no. ' +
+      'A player with 2+ years left on their deal can be Extended early (added years on top of what\'s left, at a premium); one down to their final year can be Re-signed outright. ' +
+      'A No-Movement Clause is now something you negotiate INTO a deal, not a free toggle — see the offer panel.</p>';
 
     html += '<div class="cap-summary-card" style="--accent:' + U.colorForId(team.id) + '">';
     html += '<div class="team-card-head">' + U.crestHtml(team) + '<span class="team-name">' + U.escapeHtml(team.name) +
@@ -78,20 +142,28 @@
 
     var nmcUsed = S.nmcCountForTeam(selectedTeamId);
     html += "<h3>Roster (" + roster.length + " / " + S.getSettings().rosterMax + ")</h3>";
-    html += '<p class="muted small">No-Movement Clauses used: ' + nmcUsed + ' / ' + S.NMC_MAX_PER_TEAM + ' — an NMC\'d player can\'t be released, traded, or promoted away until you toggle it off.</p>';
+    html += '<p class="muted small">No-Movement Clauses active: ' + nmcUsed + ' / ' + S.NMC_MAX_PER_TEAM + ' — negotiated into a deal at signing/extension time (see the offer panel), an NMC\'d player can\'t be released, traded, or promoted away for the rest of that contract.</p>';
     if (!roster.length) {
       html += '<p class="muted">No players on this roster yet.</p>';
     } else {
       html += '<table class="data-table"><thead><tr><th>Name</th><th>Pos</th><th>Archetype</th><th>OVR</th><th>POT</th><th>Salary</th><th>Years Left</th><th>Asking Price</th><th>NMC</th><th></th></tr></thead><tbody>';
       roster.forEach(function (p) {
         var asking = askingPriceFor(p, team);
+        var outlook = contractValueOutlook(p, asking);
+        var rowMode = p.contractYears <= 1 ? "resign" : "extend";
+        var canAct = rowMode === "resign" || maxExtendYearsFor(p) >= 1;
         html += "<tr><td>" + U.escapeHtml(p.name) + "</td><td>" + p.position + "</td><td>" + U.escapeHtml(p.archetype || "") + "</td><td>" + p.overall + "</td><td>" + p.potential + "</td><td>" + U.formatMoney(p.salary) + "</td>";
         html += "<td>" + (p.contractYears <= 1 ? '<span class="pill pill-warn">' + p.contractYears + " (expiring)</span>" : p.contractYears) + "</td>";
-        html += "<td>" + U.formatMoney(asking) + "</td>";
-        html += '<td><button class="btn btn-sm' + (p.nmc ? " btn-primary" : "") + '" data-action="toggle-nmc" data-id="' + p.id + '" title="No-Movement Clause">' + (p.nmc ? "NMC ✓" : "—") + '</button></td>';
-        html += '<td class="row-actions"><button class="btn btn-sm" data-action="toggle-offer" data-mode="resign" data-id="' + p.id + '">Re-sign</button>' +
-          '<button class="btn btn-sm btn-danger" data-action="release" data-id="' + p.id + '">Release</button></td></tr>';
-        if (offer.playerId === p.id) html += offerRow(p, team, "resign", 10);
+        html += "<td>" + U.formatMoney(asking) + (outlook ? ' <span class="pill ' + outlook.cls + ' small" title="Current salary vs. their true asking price">' + outlook.label + "</span>" : "") + "</td>";
+        html += '<td>' + (p.nmc ? '<span class="pill pill-accent small" title="No-Movement Clause — locked for the life of this contract">NMC</span>' : '<span class="muted">—</span>') + '</td>';
+        html += '<td class="row-actions">';
+        if (canAct) {
+          html += '<button class="btn btn-sm" data-action="toggle-offer" data-mode="' + rowMode + '" data-id="' + p.id + '">' + (rowMode === "resign" ? "Re-sign" : "Extend") + '</button>';
+        } else {
+          html += '<span class="pill small" title="Already at the 5-year contract-length ceiling — check back once their term is closer to expiring">Fully committed</span>';
+        }
+        html += '<button class="btn btn-sm btn-danger" data-action="release" data-id="' + p.id + '">Release</button></td></tr>';
+        if (offer.playerId === p.id) html += offerRow(p, team, rowMode, 10);
       });
       html += "</tbody></table>";
     }
@@ -165,9 +237,9 @@
         var p = S.getPlayer(b.dataset.id);
         if (!p) return;
         if (offer.playerId === p.id) {
-          offer = { playerId: null, years: 2, amount: 0 };
+          resetOffer();
         } else {
-          offer = { playerId: p.id, years: 2, amount: askingPriceFor(p, team) };
+          offer = { playerId: p.id, years: 2, amount: effectiveAskingFor(p, team, "sign", false), nmc: false };
         }
         render();
       });
@@ -192,22 +264,40 @@
 
   // Inline negotiation panel rendered directly under a player's row.
   function offerRow(p, team, mode, colspan) {
-    var asking = askingPriceFor(p, team);
+    var baseAsking = askingPriceFor(p, team);
+    var maxExtend = mode === "extend" ? Math.max(1, maxExtendYearsFor(p)) : 5;
+    if (offer.nmc == null) offer.nmc = false;
+    if (mode === "extend" && offer.years > maxExtend) offer.years = maxExtend;
+    var nmcAvailable = !!p.nmc || S.nmcCountForTeam(selectedTeamId) < S.NMC_MAX_PER_TEAM;
+    if (offer.nmc && !nmcAvailable) offer.nmc = false; // e.g. another NMC got negotiated elsewhere while this panel was open
+    var asking = effectiveAskingFor(p, team, mode, offer.nmc);
     if (offer.amount == null || !offer.amount) offer.amount = asking;
     var rejectChance = U.contractRejectChance(asking, offer.amount, offer.years);
     var riskLabel = rejectChance >= 0.5 ? "pill-warn" : rejectChance >= 0.2 ? "" : "pill-clinch";
     var html = '<tr class="offer-row"><td colspan="' + (colspan || 9) + '"><div class="offer-panel">';
-    html += '<div class="offer-panel-title">' + (mode === "sign" ? "Offer a contract to " : "Re-sign ") + U.escapeHtml(p.name) + '</div>';
+    var titleVerb = mode === "sign" ? "Offer a contract to " : mode === "extend" ? "Extend " : "Re-sign ";
+    html += '<div class="offer-panel-title">' + titleVerb + U.escapeHtml(p.name) +
+      (mode === "extend" ? ' <span class="muted small">(' + p.contractYears + " yr" + (p.contractYears === 1 ? "" : "s") + " left on their current deal)</span>" : "") +
+      "</div>";
     html += '<div class="offer-panel-grid">';
-    html += '<label>Years<select id="offer-years">';
-    for (var y = 1; y <= 5; y++) {
+    html += "<label>" + (mode === "extend" ? "Extra Years" : "Years") + '<select id="offer-years">';
+    for (var y = 1; y <= maxExtend; y++) {
       html += '<option value="' + y + '"' + (offer.years === y ? " selected" : "") + ">" + y + " yr" + (y > 1 ? "s" : "") + "</option>";
     }
     html += "</select></label>";
     html += '<label>Offer Salary<input type="number" id="offer-amount" step="500" min="' + U.SALARY_MIN + '" value="' + offer.amount + '"></label>';
-    html += '<div class="offer-panel-info"><span class="muted small">Asking: ' + U.formatMoney(asking) + '</span>' +
-      '<span class="pill ' + riskLabel + ' small">Reject risk: ' + Math.round(rejectChance * 100) + '%</span></div>';
     html += "</div>";
+    if (mode === "extend") {
+      html += '<p class="muted small">Locking in ' + offer.years + " extra year" + (offer.years > 1 ? "s" : "") + " now — before " + U.escapeHtml(p.name) +
+        " ever hits free agency — would run " + (p.contractYears + offer.years) + " total years from today, but costs an early-extension premium: " +
+        U.formatMoney(Math.round(baseAsking * extensionPremiumFactor(p.contractYears))) + " vs. " + U.formatMoney(baseAsking) + " at plain market value.</p>";
+    }
+    html += '<label class="offer-nmc-row"><input type="checkbox" id="offer-nmc"' + (offer.nmc ? " checked" : "") + (nmcAvailable ? "" : " disabled") + '> ' +
+      "Include a No-Movement Clause " +
+      '<span class="muted small">(+' + Math.round((NMC_PREMIUM_FACTOR - 1) * 100) + "% asking — can't be released, traded, or promoted away for the life of this deal)</span></label>";
+    if (!nmcAvailable) html += '<p class="muted small">You\'re already carrying ' + S.NMC_MAX_PER_TEAM + " No-Movement Clauses — one has to expire or its player has to leave before you can negotiate another.</p>";
+    html += '<div class="offer-panel-info"><span class="muted small">Asking' + (mode === "extend" || offer.nmc ? " (with the above)" : "") + ": " + U.formatMoney(asking) + '</span>' +
+      '<span class="pill ' + riskLabel + ' small">Reject risk: ' + Math.round(rejectChance * 100) + '%</span></div>';
     html += '<div class="form-actions">';
     html += '<button class="btn btn-primary btn-sm" data-action="send-offer" data-mode="' + mode + '" data-id="' + p.id + '">Send Offer</button>';
     html += '<button class="btn btn-sm" data-action="cancel-offer">Cancel</button>';
@@ -225,7 +315,7 @@
           return;
         }
         if (p.nmc) {
-          alert(p.name + " has a No-Movement Clause and can't be released while it's active. Toggle it off first.");
+          alert(p.name + " has a No-Movement Clause and can't be released — it runs for the life of their current contract. Wait it out, or trade/promote once it expires.");
           return;
         }
         if (!S.wouldMeetRosterMinimum(selectedTeamId, [p.id])) {
@@ -241,39 +331,34 @@
         }
       });
     });
-    container.querySelectorAll('[data-action="toggle-nmc"]').forEach(function (b) {
-      b.addEventListener("click", function () {
-        var p = S.getPlayer(b.dataset.id);
-        if (!p) return;
-        if (!p.nmc) {
-          if (S.nmcCountForTeam(selectedTeamId) >= S.NMC_MAX_PER_TEAM) {
-            alert("You can only have " + S.NMC_MAX_PER_TEAM + " No-Movement Clauses active at a time. Toggle one off first.");
-            return;
-          }
-          S.updatePlayer(p.id, { nmc: true });
-        } else {
-          S.updatePlayer(p.id, { nmc: false });
-        }
-        render();
-        if (window.PHLApp) window.PHLApp.refresh();
-      });
-    });
     container.querySelectorAll('[data-action="toggle-offer"]').forEach(function (b) {
       b.addEventListener("click", function () {
         var p = S.getPlayer(b.dataset.id);
         if (!p) return;
         if (offer.playerId === p.id) {
-          offer = { playerId: null, years: 2, amount: 0 };
+          resetOffer();
         } else {
           var team = S.getTeam(selectedTeamId);
-          offer = { playerId: p.id, years: b.dataset.mode === "resign" ? Math.max(1, Math.min(5, (p.contractYears || 2))) : 2, amount: askingPriceFor(p, team) };
+          var mode = b.dataset.mode;
+          var years, nmc;
+          if (mode === "resign") {
+            years = Math.max(1, Math.min(5, (p.contractYears || 2)));
+            nmc = !!p.nmc; // default to "keep what they already have" — an explicit uncheck drops it
+          } else if (mode === "extend") {
+            years = Math.max(1, Math.min(2, maxExtendYearsFor(p)));
+            nmc = !!p.nmc;
+          } else {
+            years = 2;
+            nmc = false;
+          }
+          offer = { playerId: p.id, years: years, amount: effectiveAskingFor(p, team, mode, nmc), nmc: nmc };
         }
         render();
       });
     });
     var cancelBtn = container.querySelector('[data-action="cancel-offer"]');
     if (cancelBtn) cancelBtn.addEventListener("click", function () {
-      offer = { playerId: null, years: 2, amount: 0 };
+      resetOffer();
       render();
     });
     var yearsSel = container.querySelector("#offer-years");
@@ -284,6 +369,11 @@
     var amountInput = container.querySelector("#offer-amount");
     if (amountInput) amountInput.addEventListener("change", function (e) {
       offer.amount = Math.max(U.SALARY_MIN, parseInt(e.target.value, 10) || U.SALARY_MIN);
+      render();
+    });
+    var nmcCheckbox = container.querySelector("#offer-nmc");
+    if (nmcCheckbox) nmcCheckbox.addEventListener("change", function (e) {
+      offer.nmc = !!e.target.checked;
       render();
     });
     container.querySelectorAll('[data-action="send-offer"]').forEach(function (b) {
@@ -328,6 +418,11 @@
         S.overallCapForDivision(team.division) + " overall cutoff and can't be signed here.");
       return;
     }
+    if (mode === "sign" && !S.meetsOverallFloor(p.overall, team.division)) {
+      alert(p.name + " (" + p.overall + " OVR) is below the " + S.getDivision(team.division).name + " division's " +
+        S.overallFloorForDivision(team.division) + " overall floor and can't be signed here.");
+      return;
+    }
     var offersThisSeason = S.contractOffersThisSeason(p.id);
     if (offersThisSeason.length >= 3) {
       alert("You've already made 3 contract offers to " + p.name + " this season — that's the maximum allowed.");
@@ -350,14 +445,29 @@
       alert("You already carry " + S.GOALIE_MAX + " goalies — the most a team can hold. Release one first.");
       return;
     }
+    // A No-Movement Clause is now negotiated INTO a deal, not toggled for
+    // free afterward — so it has to clear the same per-team cap right here,
+    // before anything else about this offer gets committed. Re-checked
+    // again in finalizeContract() since a counter-offer round happens
+    // asynchronously and someone else's negotiation could close a slot in
+    // between (extremely unlikely for a single-player game, but cheap to
+    // guard anyway).
+    if (offer.nmc && !p.nmc && S.nmcCountForTeam(selectedTeamId) >= S.NMC_MAX_PER_TEAM) {
+      alert("You're already carrying " + S.NMC_MAX_PER_TEAM + " No-Movement Clauses — drop the checkbox on this offer, or wait for one of the others to expire.");
+      return;
+    }
     var space = S.capSpace(selectedTeamId);
-    var currentSalary = mode === "resign" ? p.salary : 0;
-    var spaceAfterRelease = space + (mode === "resign" ? currentSalary : 0); // re-signing frees up their old cap hit first
+    var currentSalary = (mode === "resign" || mode === "extend") ? p.salary : 0;
+    var spaceAfterRelease = space + currentSalary; // re-signing/extending frees up their old cap hit first
     if (offer.amount > spaceAfterRelease) {
       alert("Not enough cap space for that offer (needs " + U.formatMoney(offer.amount) + ", have " + U.formatMoney(spaceAfterRelease) + ").");
       return;
     }
-    var asking = askingPriceFor(p, team);
+    // The number this offer is actually judged against — plain asking
+    // price bumped for an early extension's premium and/or a requested
+    // No-Movement Clause (see effectiveAskingFor). askingPriceFor() alone
+    // stays the honest baseline shown in the roster/free-agent tables.
+    var asking = effectiveAskingFor(p, team, mode, offer.nmc);
     // Every offer counts toward the 3-per-season limit, and its amount is
     // remembered so a later fresh offer this season must differ. One record
     // covers the whole negotiation below, including any counter-offer round
@@ -369,7 +479,7 @@
       // Too far under asking to even negotiate — flat reject, no counter.
       alert(p.name + " turned down your offer outright (" + U.formatMoney(offer.amount) + " over " + offer.years + " yr" +
         (offer.years > 1 ? "s" : "") + ", asking " + U.formatMoney(asking) + "). That's too far under asking price to negotiate — try a much stronger offer.");
-      offer = { playerId: null, years: 2, amount: 0 };
+      resetOffer();
       render();
       return;
     }
@@ -378,7 +488,7 @@
       // instead of rolling a flat reject chance — see the forced
       // js/negotiationModal.js pop-up this triggers.
       var counterAmount = Math.round(offer.amount + (asking - offer.amount) * (0.55 + Math.random() * 0.25));
-      openContractCounter(p, team, mode, asking, offer.amount, offer.years, counterAmount);
+      openContractCounter(p, team, mode, asking, offer.amount, offer.years, counterAmount, offer.nmc);
       return;
     }
 
@@ -388,35 +498,46 @@
     if (rejected) {
       alert(p.name + " turned down your offer (" + U.formatMoney(offer.amount) + " over " + offer.years + " yr" + (offer.years > 1 ? "s" : "") +
         ", asking " + U.formatMoney(asking) + "). Try sweetening the deal.");
-      offer = { playerId: null, years: 2, amount: 0 };
+      resetOffer();
       render();
       return;
     }
-    finalizeContract(p, team, mode, offer.amount, offer.years);
+    finalizeContract(p, team, mode, offer.amount, offer.years, offer.nmc);
   }
 
   // Applies an agreed-upon contract, whether reached directly or after a
-  // counter-offer round — the one place that actually signs/re-signs the
-  // player. Re-checks cap space against the FINAL amount, since a
-  // counter-offer round can land on a higher number than what originally
-  // passed the cap check in sendOffer().
-  function finalizeContract(p, team, mode, amount, years) {
-    var space = S.capSpace(selectedTeamId) + (mode === "resign" ? (p.salary || 0) : 0);
+  // counter-offer round — the one place that actually signs/re-signs/
+  // extends the player. Re-checks cap space against the FINAL amount,
+  // since a counter-offer round can land on a higher number than what
+  // originally passed the cap check in sendOffer() — and re-checks the NMC
+  // cap for the same reason (see the note in sendOffer()).
+  function finalizeContract(p, team, mode, amount, years, nmc) {
+    var space = S.capSpace(selectedTeamId) + ((mode === "resign" || mode === "extend") ? (p.salary || 0) : 0);
     if (amount > space) {
       alert("Not enough cap space to close that deal (needs " + U.formatMoney(amount) + ", have " + U.formatMoney(space) + "). The offer falls through.");
-      offer = { playerId: null, years: 2, amount: 0 };
+      resetOffer();
       render();
       return;
     }
-    var patch = { contractYears: years, salary: amount };
+    if (nmc && !p.nmc && S.nmcCountForTeam(selectedTeamId) >= S.NMC_MAX_PER_TEAM) {
+      alert(p.name + " agreed to terms, but you're already carrying " + S.NMC_MAX_PER_TEAM + " No-Movement Clauses — the deal falls through. Negotiate again without the No-Movement Clause, or free up a slot first.");
+      resetOffer();
+      render();
+      return;
+    }
+    var patch = { salary: amount, nmc: !!nmc };
+    patch.contractYears = mode === "extend" ? (p.contractYears || 0) + years : years;
     if (mode === "sign") {
       patch.teamId = selectedTeamId;
       patch.eligibleDivisions = null; // once signed, a breakout rookie's division restriction is lifted permanently
     }
     S.updatePlayer(p.id, patch);
-    S.addSigning({ teamId: selectedTeamId, playerId: p.id, playerName: p.name, mode: mode, salary: patch.salary, years: patch.contractYears });
-    offer = { playerId: null, years: 2, amount: 0 };
-    alert(p.name + " agreed to " + U.formatMoney(amount) + " over " + years + " yr" + (years > 1 ? "s" : "") + "!");
+    S.addSigning({ teamId: selectedTeamId, playerId: p.id, playerName: p.name, mode: mode, salary: patch.salary, years: patch.contractYears, nmc: patch.nmc });
+    resetOffer();
+    var summary = mode === "extend" ?
+      p.name + " agreed to a " + years + "-year extension at " + U.formatMoney(amount) + " (" + patch.contractYears + " total years remaining)" :
+      p.name + " agreed to " + U.formatMoney(amount) + " over " + years + " yr" + (years > 1 ? "s" : "");
+    alert(summary + (patch.nmc ? ", including a No-Movement Clause" : "") + "!");
     render();
     if (window.PHLApp) window.PHLApp.refresh();
   }
@@ -425,21 +546,22 @@
   // up the three choices the user has: counter back with a new number,
   // resubmit the original offer as a final take-it-or-leave-it, or drop the
   // offer entirely.
-  function openContractCounter(p, team, mode, asking, originalOffer, years, counterAmount) {
+  function openContractCounter(p, team, mode, asking, originalOffer, years, counterAmount, nmc) {
     window.PHLNegotiationModal.showContractCounter({
       playerName: p.name,
       asking: asking,
       originalOffer: originalOffer,
       counterOffer: counterAmount,
       years: years,
+      nmc: nmc,
       onCounterBack: function (finalAmount) {
-        resolveContractRound2(p, team, mode, counterAmount, finalAmount, years);
+        resolveContractRound2(p, team, mode, counterAmount, finalAmount, years, nmc);
       },
       onKeepOriginal: function () {
-        resolveContractRound2(p, team, mode, counterAmount, originalOffer, years);
+        resolveContractRound2(p, team, mode, counterAmount, originalOffer, years, nmc);
       },
       onDrop: function () {
-        offer = { playerId: null, years: 2, amount: 0 };
+        resetOffer();
         render();
       },
     });
@@ -449,9 +571,9 @@
   // is automatically done; come in under it and it's one final reject-chance
   // roll (using the counter amount as the new reference asking price) — no
   // further rounds after this either way.
-  function resolveContractRound2(p, team, mode, counterAmount, finalAmount, years) {
+  function resolveContractRound2(p, team, mode, counterAmount, finalAmount, years, nmc) {
     if (finalAmount >= counterAmount) {
-      finalizeContract(p, team, mode, finalAmount, years);
+      finalizeContract(p, team, mode, finalAmount, years, nmc);
       return;
     }
     var rejectChance = U.contractRejectChance(counterAmount, finalAmount, years);
@@ -459,11 +581,11 @@
     if (rejected) {
       alert(p.name + " turned down your final offer (" + U.formatMoney(finalAmount) + " over " + years + " yr" + (years > 1 ? "s" : "") +
         ", they'd countered at " + U.formatMoney(counterAmount) + "). Negotiations end here for now.");
-      offer = { playerId: null, years: 2, amount: 0 };
+      resetOffer();
       render();
       return;
     }
-    finalizeContract(p, team, mode, finalAmount, years);
+    finalizeContract(p, team, mode, finalAmount, years, nmc);
   }
 
   window.PHLContracts = { render: render, askingPriceFor: askingPriceFor };

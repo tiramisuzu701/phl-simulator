@@ -142,11 +142,15 @@
     advancePhase(sd);
   }
 
-  // Overall cutoff for the division currently on the clock (see
-  // js/state.js overallCapForDivision) — phase ids ("pro", "contender",
-  // "prospect") match division ids directly. Null (Pro) means uncapped.
+  // Overall ceiling/floor for the division currently on the clock (see
+  // js/state.js overallCapForDivision / overallFloorForDivision) — phase
+  // ids ("pro", "contender", "prospect") match division ids directly. Null
+  // ceiling (Pro) means uncapped; null floor (Prospect) means no floor.
   function currentPhaseCap(sd) {
     return sd.phase ? S.overallCapForDivision(sd.phase) : null;
+  }
+  function currentPhaseFloor(sd) {
+    return sd.phase ? S.overallFloorForDivision(sd.phase) : null;
   }
 
   function pickForTeam(teamId, playerId) {
@@ -156,6 +160,8 @@
     if (!player || !player.startupDraftPool || player.teamId) return;
     var cap = currentPhaseCap(sd);
     if (cap != null && player.overall > cap) return; // above this phase's division overall cutoff — blocked
+    var floor = currentPhaseFloor(sd);
+    if (floor != null && player.overall < floor) return; // below this phase's division overall floor — blocked
     if (player.position === "G" && !S.wouldMeetGoalieMax(teamId, [], [player])) return; // already at the goalie sub-cap
     // Draft picks sign a cheap, short "entry contract" rather than their
     // full market value — one SEASON PLAYED at 70% of their actual asking
@@ -251,6 +257,8 @@
     var pool = S.getStartupPool();
     var cap = currentPhaseCap(sd);
     if (cap != null) pool = pool.filter(function (p) { return p.overall <= cap; });
+    var floor = currentPhaseFloor(sd);
+    if (floor != null) pool = pool.filter(function (p) { return p.overall >= floor; });
     var need = teamNeedCounts(teamId);
     if ((need.G || 0) >= S.GOALIE_MAX) pool = pool.filter(function (p) { return p.position !== "G"; }); // already at the goalie sub-cap
     if (!pool.length) return null;
@@ -461,11 +469,18 @@
       html += "</div>";
 
       var phaseCap = currentPhaseCap(sd);
+      var phaseFloor = currentPhaseFloor(sd);
       var pool = S.getStartupPool().slice().sort(function (a, b) { return b.overall - a.overall; });
       if (posFilter) pool = pool.filter(function (p) { return p.position === posFilter; });
-      if (phaseCap != null) {
-        html += '<p class="muted small">' + PHASE_LABEL[sd.phase] + " division overall cutoff: " + phaseCap + " or below. Players above that stay in the pool for now (they may go undrafted).</p>";
-        pool = pool.filter(function (p) { return p.overall <= phaseCap; });
+      if (phaseCap != null || phaseFloor != null) {
+        var rangeMsg = PHASE_LABEL[sd.phase] + " division overall range: ";
+        if (phaseFloor != null && phaseCap != null) rangeMsg += phaseFloor + "–" + phaseCap + ".";
+        else if (phaseFloor != null) rangeMsg += phaseFloor + " or above.";
+        else rangeMsg += phaseCap + " or below.";
+        rangeMsg += " Players outside that range stay in the pool for now (they may go undrafted here, or cascade to a later phase).";
+        html += '<p class="muted small">' + rangeMsg + "</p>";
+        if (phaseCap != null) pool = pool.filter(function (p) { return p.overall <= phaseCap; });
+        if (phaseFloor != null) pool = pool.filter(function (p) { return p.overall >= phaseFloor; });
       }
       var myGoalieCount = (S.getRoster(fr.teamId) || []).filter(function (p) { return p.position === "G"; }).length;
       var goalieCapReached = myGoalieCount >= S.GOALIE_MAX;

@@ -274,10 +274,22 @@
         " would be above the " + S.getDivision(myDiv).name + " division's " + S.overallCapForDivision(myDiv) + " overall cutoff — the trade can't go through.");
       return;
     }
+    var underFloorIncoming = theirs.filter(function (p) { return !S.meetsOverallFloor(p.overall, myDiv); });
+    if (underFloorIncoming.length) {
+      alert(underFloorIncoming.map(function (p) { return p.name + " (" + p.overall + " OVR)"; }).join(", ") +
+        " would be below the " + S.getDivision(myDiv).name + " division's " + S.overallFloorForDivision(myDiv) + " overall floor — the trade can't go through.");
+      return;
+    }
     var overCapOutgoing = mine.filter(function (p) { return !S.meetsOverallCap(p.overall, partnerDiv); });
     if (overCapOutgoing.length) {
       alert(overCapOutgoing.map(function (p) { return p.name + " (" + p.overall + " OVR)"; }).join(", ") +
         " would be above the " + S.getDivision(partnerDiv).name + " division's " + S.overallCapForDivision(partnerDiv) + " overall cutoff — " + S.getTeam(partnerId).name + " won't take them.");
+      return;
+    }
+    var underFloorOutgoing = mine.filter(function (p) { return !S.meetsOverallFloor(p.overall, partnerDiv); });
+    if (underFloorOutgoing.length) {
+      alert(underFloorOutgoing.map(function (p) { return p.name + " (" + p.overall + " OVR)"; }).join(", ") +
+        " would be below the " + S.getDivision(partnerDiv).name + " division's " + S.overallFloorForDivision(partnerDiv) + " overall floor — " + S.getTeam(partnerId).name + " won't take them.");
       return;
     }
 
@@ -385,6 +397,7 @@
       if (mineIds.indexOf(p.id) !== -1) return false;
       if (p.nmc) return false;
       if (!S.meetsOverallCap(p.overall, partnerDiv)) return false;
+      if (!S.meetsOverallFloor(p.overall, partnerDiv)) return false;
       if (!S.wouldMeetRosterMinimum(myTeamId, mineIds.concat([p.id]), theirsPlayers)) return false;
       if (!S.wouldMeetGoalieMax(partnerId, theirsPlayers.map(function (t) { return t.id; }), minePlayers.concat([p]))) return false;
       if ((p.salary || 0) > partnerCapSpace) return false;

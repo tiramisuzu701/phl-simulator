@@ -34,11 +34,12 @@
 
   // ---- Contract counter-offer ----
   // The AI has countered a lowball offer instead of flatly rejecting it.
-  // opts: { playerName, asking, originalOffer, counterOffer, years,
+  // opts: { playerName, asking, originalOffer, counterOffer, years, nmc,
   //         onCounterBack(amount), onKeepOriginal(), onDrop() }
   function showContractCounter(opts) {
     var body = "<p>" + U.escapeHtml(opts.playerName) + " won't sign for " + U.formatMoney(opts.originalOffer) +
       " over " + opts.years + " yr" + (opts.years > 1 ? "s" : "") + " (asking " + U.formatMoney(opts.asking) +
+      (opts.nmc ? ", including the No-Movement Clause you're asking for" : "") +
       "), but their agent will talk. Counter-offer: <strong>" + U.formatMoney(opts.counterOffer) + "</strong>.</p>";
     body += '<p class="muted small">Meet or beat their counter and the deal is done. Come in under it and there\'s still a chance they say yes — just less of one.</p>';
     body += '<div class="offer-panel-grid"><label>Your counter<input type="number" id="neg-counter-amount" step="500" min="' + U.SALARY_MIN + '" value="' + opts.counterOffer + '"></label></div>';

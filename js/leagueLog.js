@@ -22,8 +22,9 @@
     manual: "Released",
     "cap-compliance": "Released — cap compliance",
     "overall-cutoff": "Released — exceeded division overall cutoff",
+    "overall-floor": "Released — fell below division overall floor",
   };
-  var SIGNING_MODE_LABEL = { sign: "Free-agent signing", resign: "Re-signed" };
+  var SIGNING_MODE_LABEL = { sign: "Free-agent signing", resign: "Re-signed", extend: "Contract extension" };
 
   function teamBadge(teamId) {
     var t = S.getTeam(teamId);

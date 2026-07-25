@@ -851,6 +851,14 @@ select option {
   margin-bottom: 0.5rem;
 }
 .offer-panel-info { display: flex; flex-direction: column; gap: 0.3rem; }
+.offer-nmc-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.4rem 0 0.6rem;
+  font-weight: 500;
+}
+.offer-nmc-row input[type="checkbox"] { width: auto; }
 
 /* ---------- Trades ---------- */
 .trade-columns {
