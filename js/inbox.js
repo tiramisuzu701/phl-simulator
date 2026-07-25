@@ -13,7 +13,19 @@
   var S = window.PHLState;
   var U = window.PHLUtil;
   var container = null;
-  var filter = "all"; // "all" | "unread" | "actionable"
+  var filter = "all";
+
+  // Filter chips shown above the list — a plain array (rather than a
+  // hardcoded ["all","unread","actionable"] switch) so adding a new
+  // category (see "player-messages" and "management-offers") is a
+  // one-line addition, not a scattered find-and-replace.
+  var FILTERS = [
+    { key: "all", label: "All", test: function () { return true; } },
+    { key: "unread", label: "Unread", test: function (n) { return !n.read; } },
+    { key: "actionable", label: "Needs Action", test: function (n) { return !!n.actionable; } },
+    { key: "player-messages", label: "Player Messages", test: function (n) { return n.type === "player-message"; } },
+    { key: "management-offers", label: "Management Offers", test: function (n) { return n.type === "management-offer"; } },
+  ];
 
   function addNotification(entry) {
     return S.addNotification(entry);
@@ -93,6 +105,38 @@
     if (window.PHLApp) window.PHLApp.refreshAll();
   }
 
+  // Accepting hands the user's current team to the AI and reassigns their
+  // franchise to the offering team (see js/state.js setFranchise — no
+  // other cleanup needed, isManagedTeam()/isUserRelevantTeam() everywhere
+  // else just read data.franchise.teamId live). Every OTHER pending
+  // management offer is cleared out too — you've already taken a new job
+  // this off-season, the rest no longer make sense.
+  function resolveManagementOffer(notif, accept) {
+    var payload = notif.payload;
+    if (!payload) { S.removeNotification(notif.id); return; }
+    if (!accept) {
+      S.removeNotification(notif.id);
+      return;
+    }
+    var newTeam = S.getTeam(payload.teamId);
+    if (!newTeam) {
+      alert("That offer is no longer valid — the team may no longer exist.");
+      S.removeNotification(notif.id);
+      return;
+    }
+    var oldTeam = S.getTeam(payload.fromTeamId);
+    S.setFranchise(newTeam.division, newTeam.id);
+    S.getNotifications().filter(function (n) { return n.type === "management-offer"; }).forEach(function (n) {
+      S.removeNotification(n.id);
+    });
+    addNotification({
+      type: "league",
+      title: "New job",
+      body: "You're now the GM of " + newTeam.name + (oldTeam ? " — " + oldTeam.name + " is now AI-managed." : "."),
+    });
+    if (window.PHLApp) window.PHLApp.refreshAll();
+  }
+
   function typeIcon(type) {
     var icons = {
       "trade-offer": "⇄",
@@ -102,6 +146,8 @@
       playoff: "\u{1F3C6}",
       growth: "⬆",
       league: "◎",
+      "player-message": "\u{1F4AC}",
+      "management-offer": "\u{1F454}",
     };
     return icons[type] || "•";
   }
@@ -110,17 +156,15 @@
     container = el || container;
     if (!container) return;
     var all = S.getNotifications();
-    var list = all;
-    if (filter === "unread") list = all.filter(function (n) { return !n.read; });
-    else if (filter === "actionable") list = all.filter(function (n) { return n.actionable; });
+    var activeFilter = FILTERS.filter(function (f) { return f.key === filter; })[0] || FILTERS[0];
+    var list = all.filter(activeFilter.test);
 
     var html = '<div class="panel-header"><h2>Inbox</h2>' +
       '<div class="header-actions"><button class="btn btn-sm" data-action="mark-all-read">Mark All Read</button></div></div>';
-    html += '<p class="muted small">Trades between AI teams, trade offers sent to you, promotions, MVP awards and playoff results all show up here as they happen.</p>';
+    html += '<p class="muted small">Trades between AI teams, trade offers sent to you, promotions, awards and playoff results, messages from your own players, and (early in the off-season) offers to manage a different team all show up here as they happen.</p>';
     html += '<div class="tab-strip">';
-    ["all", "unread", "actionable"].forEach(function (f) {
-      html += '<button class="chip' + (filter === f ? " chip-active" : "") + '" data-filter="' + f + '">' +
-        (f === "all" ? "All" : f === "unread" ? "Unread" : "Needs Action") + "</button>";
+    FILTERS.forEach(function (f) {
+      html += '<button class="chip' + (filter === f.key ? " chip-active" : "") + '" data-filter="' + f.key + '">' + f.label + "</button>";
     });
     html += "</div>";
 
@@ -134,7 +178,7 @@
         html += '<div class="inbox-item-body">';
         html += '<div class="inbox-item-title">' + U.escapeHtml(n.title || "") + (n.read ? "" : ' <span class="pill pill-accent small">New</span>') + "</div>";
         html += '<div class="inbox-item-text muted small">' + U.escapeHtml(n.body || "") + "</div>";
-        if (n.actionable && n.type === "trade-offer") {
+        if (n.actionable && (n.type === "trade-offer" || n.type === "management-offer")) {
           html += '<div class="form-actions">' +
             '<button class="btn btn-sm btn-primary" data-action="accept-offer" data-id="' + n.id + '">Accept</button>' +
             '<button class="btn btn-sm btn-danger" data-action="reject-offer" data-id="' + n.id + '">Reject</button></div>';
@@ -172,7 +216,13 @@
     container.querySelectorAll('[data-action="accept-offer"]').forEach(function (b) {
       b.addEventListener("click", function () {
         var notif = S.getNotifications().find(function (n) { return n.id === b.dataset.id; });
-        if (notif) resolveTradeOffer(notif, true);
+        if (!notif) return;
+        if (notif.type === "management-offer") {
+          if (!confirm("Accept this offer? You'll switch franchises immediately, and your current team becomes AI-managed. This can't be undone.")) return;
+          resolveManagementOffer(notif, true);
+        } else {
+          resolveTradeOffer(notif, true);
+        }
         render();
         if (window.PHLApp) window.PHLApp.refresh();
       });
@@ -180,7 +230,9 @@
     container.querySelectorAll('[data-action="reject-offer"]').forEach(function (b) {
       b.addEventListener("click", function () {
         var notif = S.getNotifications().find(function (n) { return n.id === b.dataset.id; });
-        if (notif) resolveTradeOffer(notif, false);
+        if (!notif) return;
+        if (notif.type === "management-offer") resolveManagementOffer(notif, false);
+        else resolveTradeOffer(notif, false);
         render();
         if (window.PHLApp) window.PHLApp.refresh();
       });
@@ -192,5 +244,6 @@
     addNotification: addNotification,
     addTradeOffer: addTradeOffer,
     resolveTradeOffer: resolveTradeOffer,
+    resolveManagementOffer: resolveManagementOffer,
   };
 })();

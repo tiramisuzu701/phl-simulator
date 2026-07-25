@@ -2,11 +2,12 @@
  * Global namespace: window.PHLMvp
  *
  * Per-division awards (one league feels flat with 26 teams sharing a
- * single MVP): a First-Half MVP revealed at regular-season week 7, a
- * Second-Half MVP revealed right as the playoffs begin (computed off a
- * week-7 stat snapshot so it reflects weeks 8-12 only, not the full
- * season), and a Playoff Series MVP for every completed best-of-7 series
- * (see js/playoffs.js onSeriesWon, which calls seriesMvp()).
+ * single MVP): a First-Half MVP revealed at regular-season week 10 (the
+ * last played week before the trade-deadline break), a Second-Half MVP
+ * revealed right as the playoffs begin (computed off a week-10 stat
+ * snapshot so it reflects weeks 13-22 only, not the full season), and a
+ * Playoff Series MVP for every completed best-of-7 series (see
+ * js/playoffs.js onSeriesWon, which calls seriesMvp()).
  */
 (function () {
   "use strict";

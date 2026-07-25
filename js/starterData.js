@@ -44,11 +44,11 @@
     // in last place) simply misses the playoffs — no extra round is added
     // for it.
     // gamesPerWeek drives the weekly calendar (see js/calendar.js): each
-    // division plays a fixed 12 game-weeks of regular season (now spread
-    // across a 14 calendar-week span — weeks 1-9 and 12-14 — to make room
-    // for the week 10-11 trade-deadline break), so gamesPerWeek sets its
-    // total game count too (Pro: 2/wk x 12wk = 24 games; Contender &
-    // Prospect: 3/wk x 12wk = 36 games).
+    // division plays a fixed 20 game-weeks of regular season, split into a
+    // 10-week first half and a 10-week second half (calendar weeks 1-10 and
+    // 13-22) around the week 11-12 trade-deadline break, so gamesPerWeek
+    // sets its total game count too (Pro: 2/wk x 20wk = 40 games; Contender
+    // & Prospect: 3/wk x 20wk = 60 games).
     //
     // overallCap is the highest player overall allowed while rostered in
     // that division (enforced at every draft/trade/promotion/signing —
@@ -393,12 +393,13 @@
       rosterMax: 10, // max players a team may hold (of which at most GOALIE_MAX are goalies — see js/state.js)
       lineup: { F: 2, D: 2, G: 1 }, // active lineup per game (Puck is 2F+2D+1G)
       targetGamesPerTeam: 18, // legacy fallback only — see division.gamesPerWeek
-      offseasonWeeks: 5,
-      // Calendar-week span of the regular season. Games are only played on
-      // 12 of these 14 weeks — weeks 10-11 are the trade-deadline break
+      offseasonWeeks: 6,
+      // Calendar-week span of the regular season: a 10-week first half, a
+      // 2-week trade-deadline break, and a 10-week second half. Games are
+      // only played on 20 of these 22 weeks — weeks 11-12 are the break
       // (see js/schedule.js PLAYING_WEEKS/BREAK_WEEKS) — but calendarWeek
-      // still counts through all 14 before playoffs begin.
-      regularSeasonWeeks: 14,
+      // still counts through all 22 before playoffs begin.
+      regularSeasonWeeks: 22,
       pointsForWin: 2,
       pointsForOtLoss: 1,
       playoffTeamsPerDivision: 4,

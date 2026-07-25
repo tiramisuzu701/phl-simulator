@@ -10,17 +10,16 @@
   var modules = {
     dashboard: window.PHLDashboard,
     startup: window.PHLStartupDraft,
-    teammanagement: window.PHLTeamManagement,
+    office: window.PHLOffice,
     teams: window.PHLTeams,
     teamdetail: window.PHLTeamDetail,
-    players: window.PHLPlayers,
     schedule: window.PHLSchedule,
     standings: window.PHLStandings,
     playoffs: window.PHLPlayoffs,
     trades: window.PHLTrades,
     promotions: window.PHLPromotions,
-    contracts: window.PHLContracts,
     scrims: window.PHLScrims,
+    strategy: window.PHLStrategy,
     inbox: window.PHLInbox,
     stats: window.PHLStats,
     log: window.PHLLeagueLog,
@@ -30,24 +29,36 @@
   var TAB_LABELS = {
     dashboard: "Dashboard",
     startup: "Startup Draft",
-    teammanagement: "Team Management",
+    office: "Office",
     teams: "Teams",
     teamdetail: "Team",
-    players: "Players",
     schedule: "Schedule",
     standings: "Standings",
     playoffs: "Playoffs",
     trades: "Trades",
     promotions: "Promotions",
-    contracts: "Contracts & Cap",
     scrims: "Scrims",
+    strategy: "Strategy",
     inbox: "Inbox",
     stats: "Stats & Offseason",
     log: "League Log",
     data: "Data Tools",
   };
 
+  // "Team Management" / "Players" / "Contracts & Cap" used to be their own
+  // top-level tabs; they're now sub-tabs inside the merged "Office" tab
+  // (see js/office.js). Rather than track down and rewrite every
+  // data-goto="contracts" / data-goto="players" / data-goto="teammanagement"
+  // button scattered across dashboard.js, teamManagement.js, etc., showTab()
+  // recognizes those old names, points Office at the right sub-tab, and
+  // shows "office" instead — every existing quick-link keeps working as-is.
+  var OFFICE_ALIASES = { teammanagement: "roster", players: "players", contracts: "contracts" };
+
   function showTab(name) {
+    if (OFFICE_ALIASES[name]) {
+      if (window.PHLOffice) window.PHLOffice.goTo(OFFICE_ALIASES[name]);
+      name = "office";
+    }
     if (!modules[name]) return;
     currentTab = name;
     document.querySelectorAll(".nav-item").forEach(function (b) {
@@ -108,18 +119,18 @@
   }
 
   // "Startup Draft" is a one-time, save-opening flow — once it's complete
-  // its nav item disappears and "Team Management" (the day-to-day roster
-  // hub) takes its place. If the user happens to be sitting on the
-  // Startup Draft tab the moment it finishes, bounce them over.
+  // its nav item disappears and "Office" (the day-to-day roster/contracts/
+  // player-pool hub) takes its place. If the user happens to be sitting on
+  // the Startup Draft tab the moment it finishes, bounce them over.
   function updateNavVisibility() {
     var sd = S.getStartupDraft();
     var draftDone = !!(sd && sd.status === "complete");
     var startupNav = document.querySelector('.nav-item[data-tab="startup"]');
-    var teamMgmtNav = document.querySelector('.nav-item[data-tab="teammanagement"]');
+    var officeNav = document.querySelector('.nav-item[data-tab="office"]');
     if (startupNav) startupNav.style.display = draftDone ? "none" : "";
-    if (teamMgmtNav) teamMgmtNav.style.display = draftDone ? "" : "none";
+    if (officeNav) officeNav.style.display = draftDone ? "" : "none";
     if (draftDone && currentTab === "startup") {
-      showTab("teammanagement");
+      showTab("office");
     }
   }
 

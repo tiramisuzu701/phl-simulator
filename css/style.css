@@ -1091,6 +1091,21 @@ select option {
 }
 .scrim-lineup { display: flex; gap: 0.4rem; flex-wrap: wrap; }
 
+/* ---------- Strategy ---------- */
+.strategy-grid { display: flex; flex-wrap: wrap; gap: 1rem; }
+.strategy-card {
+  background: linear-gradient(180deg, var(--surface-1), var(--surface-2));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.85rem 1rem;
+  box-shadow: var(--shadow-lift);
+  flex: 1 1 300px;
+  min-width: 260px;
+}
+.strategy-card-active { border-color: var(--glow-2); box-shadow: 0 0 22px -10px var(--glow-2-soft); }
+.strategy-card-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.strategy-card-head h4 { margin: 0; }
+
 /* ---------- MVP / awards ---------- */
 .pill-mvp { border-color: var(--series-yellow); color: var(--series-yellow); font-weight: 600; box-shadow: 0 0 10px -6px rgba(240, 180, 41, 0.5); }
 .mvp-card h4 { margin: 0.4rem 0 0.1rem; }

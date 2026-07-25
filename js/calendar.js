@@ -2,7 +2,8 @@
  * Global namespace: window.PHLCalendar
  *
  * One button — Advance Week, in the header — drives the entire season:
- *   offseason (5 weeks, freeform) -> regular (12 weeks) ->
+ *   offseason (6 weeks, freeform) -> regular (22 weeks: 10-week first
+ *   half, 2-week trade-deadline break, 10-week second half) ->
  *   playoffs (up to 4 weeks, per-division) -> back to offseason (repeats).
  * No more separate "start the draft" / "simulate this week" / "start
  * playoffs" buttons scattered across tabs — this module is the only thing
@@ -38,8 +39,8 @@
   function weekLabel() {
     var season = S.getSeason();
     if (!isSetupComplete()) return "Startup Draft in progress";
-    if (season.phase === "offseason") return "Off-season " + season.calendarWeek + "/" + (settings().offseasonWeeks || 5);
-    if (season.phase === "regular") return "Week " + season.calendarWeek + "/" + (settings().regularSeasonWeeks || 12);
+    if (season.phase === "offseason") return "Off-season " + season.calendarWeek + "/" + (settings().offseasonWeeks || 6);
+    if (season.phase === "regular") return "Week " + season.calendarWeek + "/" + (settings().regularSeasonWeeks || 22);
     if (season.phase === "playoffs") return "Playoffs " + season.calendarWeek + "/" + maxPlayoffWeeks();
     return "";
   }
@@ -127,7 +128,7 @@
       AI.aiProposeTradesToUser();
     }
 
-    var weeksTotal = settings().offseasonWeeks || 5;
+    var weeksTotal = settings().offseasonWeeks || 6;
     if (season.calendarWeek >= weeksTotal) {
       // No more recurring Entry Draft — the only draft in a save is the
       // one-time Startup Draft. New rookies/prospects are generated
@@ -137,17 +138,20 @@
       var rookies = Stats ? Stats.generateRookieClass() : [];
       summary.push(retired.length + " player(s) retired, " + rookies.length + " breakout rookie(s) joined free agency.");
       window.PHLSchedule.generateSeasonSchedule(); // also sets phase="regular", calendarWeek=1
+      // Refill every team's first-half scrim budget now that a fresh
+      // regular season is starting — see js/scrims.js.
+      if (window.PHLScrims) window.PHLScrims.resetSplitUsage();
       summary.push("The regular season begins.");
     } else {
       S.updateSeason({ calendarWeek: season.calendarWeek + 1 });
     }
   }
 
-  // Weeks 10-11 of the regular season are the mid-season trade-deadline
+  // Weeks 11-12 of the regular season are the mid-season trade-deadline
   // break — no games are scheduled for them (see js/schedule.js
   // BREAK_WEEKS), but it's still the last window for trades, free-agent
-  // signings, and roster drops before the deadline locks at week 12.
-  var BREAK_WEEKS = [10, 11];
+  // signings, and roster drops before the deadline locks at week 13.
+  var BREAK_WEEKS = [11, 12];
 
   function runRegularWeek(season, summary) {
     var onBreak = BREAK_WEEKS.indexOf(season.calendarWeek) !== -1;
@@ -165,19 +169,24 @@
       AI.aiProposeTradesToUser();
     }
 
-    // First-half MVPs are revealed right at week 7 of the regular season
-    // (see js/mvp.js) — one per division.
-    if (season.calendarWeek === 7 && window.PHLMvp) {
+    // First-half MVPs are revealed right at week 10 of the regular season —
+    // the last played week of the first half, right before the trade-
+    // deadline break (see js/mvp.js) — one per division.
+    if (season.calendarWeek === 10 && window.PHLMvp) {
       window.PHLMvp.computeFirstHalfMvps();
       summary.push("First-Half MVPs have been announced around the league.");
     }
 
-    var weeksTotal = settings().regularSeasonWeeks || 12;
+    var weeksTotal = settings().regularSeasonWeeks || 22;
     var nextWeek = season.calendarWeek + 1;
     if (season.calendarWeek >= weeksTotal) {
       if (window.PHLMvp) {
         window.PHLMvp.computeSecondHalfMvps();
         summary.push("Second-Half MVPs have been announced around the league.");
+      }
+      if (window.PHLAwards) {
+        window.PHLAwards.computeSeasonAwards();
+        summary.push("Season Awards (Defenseman/Goalie/Rookie/Player of the Year) have been announced around the league.");
       }
       var Playoffs = window.PHLPlayoffs;
       S.getDivisions().forEach(function (d) {
@@ -187,12 +196,15 @@
       summary.push("Regular season complete — the playoffs begin.");
     } else {
       // The trade deadline locks league-wide the moment the break ends
-      // (week 12 onward) — trades, free-agent signings, and releases stay
+      // (week 13 onward) — trades, free-agent signings, and releases stay
       // blocked through the rest of the season and all of the playoffs,
       // until the next off-season begins (see js/state.js
       // isTransactionWindowOpen).
       if (BREAK_WEEKS.indexOf(nextWeek) === -1 && nextWeek > BREAK_WEEKS[BREAK_WEEKS.length - 1] && season.calendarWeek <= BREAK_WEEKS[BREAK_WEEKS.length - 1]) {
         summary.push("The trade deadline has passed — trades, free-agent signings, and releases are locked league-wide until the next off-season.");
+        // The break just ended and the second half is starting — refill
+        // every team's scrim budget for it (see js/scrims.js).
+        if (window.PHLScrims) window.PHLScrims.resetSplitUsage();
       }
       S.updateSeason({ calendarWeek: nextWeek });
     }
@@ -224,6 +236,12 @@
         seasonNumber: (season.seasonNumber || 1) + 1,
         entryDraftDoneThisCycle: false,
       });
+      // Refill every team's off-season scrim budget now that a fresh
+      // off-season is starting — see js/scrims.js.
+      if (window.PHLScrims) window.PHLScrims.resetOffseasonUsage();
+      // Management (GM) offers only ever appear right here, at the very
+      // start of the off-season — see js/gmOffers.js.
+      if (window.PHLGmOffers) window.PHLGmOffers.generateOffers();
       summary.push("Playoffs complete — the off-season begins.");
       // Anyone who grew past their division's overall cutoff during the
       // season just played gets released to free agency now — see
@@ -256,10 +274,9 @@
     if (blockedReason) return { advanced: false, reason: blockedReason };
 
     var Scrims = window.PHLScrims;
-    if (Scrims) {
-      Scrims.weeklyChemistryUpkeep();
-      Scrims.resetWeeklyUsage();
-    }
+    if (Scrims) Scrims.weeklyChemistryUpkeep();
+    if (window.PHLPlayerMessages) window.PHLPlayerMessages.weeklyCheck();
+    if (window.PHLStrategy) window.PHLStrategy.autoAssignAiStrategies();
 
     var season = S.getSeason();
     var summary = [];

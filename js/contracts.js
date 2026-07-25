@@ -81,15 +81,25 @@
     return 1 + U.clamp((contractYearsRemaining || 0) * 0.03, 0, 0.15);
   }
 
+  // A discontented player (see js/playerMessages.js — benched too long,
+  // playing below expectations) wants to be paid for their trouble on top
+  // of everything else. Tops out at +25% asking at max (100) unhappiness;
+  // a fresh contract wipes it back to zero (see finalizeContract below).
+  function unhappinessPremiumFactor(p) {
+    return 1 + U.clamp((p.unhappiness || 0) / 100, 0, 1) * 0.25;
+  }
+
   // The number actually driving reject-chance/lowball/counter-offer math —
-  // base asking price, bumped for an early extension's premium and/or a
-  // requested No-Movement Clause. askingPriceFor() above stays the honest,
-  // un-bumped baseline shown everywhere else, so the user can always see
-  // exactly what each premium is adding on top of plain market value.
+  // base asking price, bumped for an early extension's premium, a
+  // requested No-Movement Clause, and/or the player's own unhappiness.
+  // askingPriceFor() above stays the honest, un-bumped baseline shown
+  // everywhere else, so the user can always see exactly what each premium
+  // is adding on top of plain market value.
   function effectiveAskingFor(p, team, mode, includeNmc) {
     var asking = askingPriceFor(p, team);
     if (mode === "extend") asking = Math.round(asking * extensionPremiumFactor(p.contractYears));
     if (includeNmc) asking = Math.round(asking * NMC_PREMIUM_FACTOR);
+    asking = Math.round(asking * unhappinessPremiumFactor(p));
     return asking;
   }
 
@@ -102,6 +112,16 @@
     if (!p.salary || !asking) return null;
     if (p.salary < asking * 0.85) return { label: "Team-Friendly", cls: "pill-clinch" };
     if (p.salary > asking * 1.15) return { label: "Overpaid", cls: "pill-warn" };
+    return null;
+  }
+
+  // Surfaces accumulated discontent (see js/playerMessages.js) right in
+  // the roster table, not just buried in the offer panel — so the user
+  // can see a problem brewing before they ever open a negotiation.
+  function unhappinessLabel(p) {
+    var u = p.unhappiness || 0;
+    if (u >= 70) return { label: "Very Unhappy", cls: "pill-warn" };
+    if (u >= 35) return { label: "Unhappy", cls: "pill-warn" };
     return null;
   }
 
@@ -150,9 +170,11 @@
       roster.forEach(function (p) {
         var asking = askingPriceFor(p, team);
         var outlook = contractValueOutlook(p, asking);
+        var unhappy = unhappinessLabel(p);
         var rowMode = p.contractYears <= 1 ? "resign" : "extend";
         var canAct = rowMode === "resign" || maxExtendYearsFor(p) >= 1;
-        html += "<tr><td>" + U.escapeHtml(p.name) + "</td><td>" + p.position + "</td><td>" + U.escapeHtml(p.archetype || "") + "</td><td>" + p.overall + "</td><td>" + p.potential + "</td><td>" + U.formatMoney(p.salary) + "</td>";
+        html += "<tr><td>" + U.escapeHtml(p.name) + (unhappy ? ' <span class="pill ' + unhappy.cls + ' small" title="Discontent is inflating their asking price — see Player Messages in the Inbox">' + unhappy.label + "</span>" : "") +
+          "</td><td>" + p.position + "</td><td>" + U.escapeHtml(p.archetype || "") + "</td><td>" + p.overall + "</td><td>" + p.potential + "</td><td>" + U.formatMoney(p.salary) + "</td>";
         html += "<td>" + (p.contractYears <= 1 ? '<span class="pill pill-warn">' + p.contractYears + " (expiring)</span>" : p.contractYears) + "</td>";
         html += "<td>" + U.formatMoney(asking) + (outlook ? ' <span class="pill ' + outlook.cls + ' small" title="Current salary vs. their true asking price">' + outlook.label + "</span>" : "") + "</td>";
         html += '<td>' + (p.nmc ? '<span class="pill pill-accent small" title="No-Movement Clause — locked for the life of this contract">NMC</span>' : '<span class="muted">—</span>') + '</td>';
@@ -296,7 +318,11 @@
       "Include a No-Movement Clause " +
       '<span class="muted small">(+' + Math.round((NMC_PREMIUM_FACTOR - 1) * 100) + "% asking — can't be released, traded, or promoted away for the life of this deal)</span></label>";
     if (!nmcAvailable) html += '<p class="muted small">You\'re already carrying ' + S.NMC_MAX_PER_TEAM + " No-Movement Clauses — one has to expire or its player has to leave before you can negotiate another.</p>";
-    html += '<div class="offer-panel-info"><span class="muted small">Asking' + (mode === "extend" || offer.nmc ? " (with the above)" : "") + ": " + U.formatMoney(asking) + '</span>' +
+    if (p.unhappiness > 0) {
+      html += '<p class="muted small">' + U.escapeHtml(p.name) + " is carrying some discontent (see Player Messages in the Inbox) — that\'s adding " +
+        Math.round((unhappinessPremiumFactor(p) - 1) * 100) + "% to their asking price on top of everything else. A fresh deal wipes it clean.</p>";
+    }
+    html += '<div class="offer-panel-info"><span class="muted small">Asking' + (mode === "extend" || offer.nmc || p.unhappiness > 0 ? " (with the above)" : "") + ": " + U.formatMoney(asking) + '</span>' +
       '<span class="pill ' + riskLabel + ' small">Reject risk: ' + Math.round(rejectChance * 100) + '%</span></div>';
     html += '<div class="form-actions">';
     html += '<button class="btn btn-primary btn-sm" data-action="send-offer" data-mode="' + mode + '" data-id="' + p.id + '">Send Offer</button>';
@@ -525,7 +551,10 @@
       render();
       return;
     }
-    var patch = { salary: amount, nmc: !!nmc };
+    // A freshly-agreed deal is a clean slate — whatever grievance was
+    // driving their asking price up (see js/playerMessages.js) is
+    // considered addressed the moment they sign.
+    var patch = { salary: amount, nmc: !!nmc, unhappiness: 0 };
     patch.contractYears = mode === "extend" ? (p.contractYears || 0) + years : years;
     if (mode === "sign") {
       patch.teamId = selectedTeamId;
@@ -588,5 +617,5 @@
     finalizeContract(p, team, mode, finalAmount, years, nmc);
   }
 
-  window.PHLContracts = { render: render, askingPriceFor: askingPriceFor };
+  window.PHLContracts = { render: render, askingPriceFor: askingPriceFor, effectiveAskingFor: effectiveAskingFor };
 })();

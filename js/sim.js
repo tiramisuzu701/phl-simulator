@@ -81,13 +81,14 @@
   }
 
   // ---- Team chemistry (Scrims, js/scrims.js) ----------------------------
-  // A team's chemistry (0-100, baseline 50) nudges both its offense and
+  // A team's chemistry (0-25, baseline 12) nudges both its offense and
   // defense a little in either direction — small enough to never dominate
-  // the sim, but a real, visible payoff for running scrims.
+  // the sim, but a real, visible payoff for running scrims. Same
+  // -4.17..+4.17 swing as the old 0-100 scale, just rescaled.
   function chemistryRatingBonus(teamId) {
     var t = S.getTeam(teamId);
-    var chem = t && t.chemistry != null ? t.chemistry : 50;
-    return (chem - 50) / 12; // roughly -4.2 .. +4.2
+    var chem = t && t.chemistry != null ? t.chemistry : 12;
+    return (chem - 12.5) / 3; // roughly -4.17 .. +4.17
   }
 
   function pickScorer(skaters, excludeId) {
@@ -109,10 +110,13 @@
 
     var homeChem = chemistryRatingBonus(homeTeamId);
     var awayChem = chemistryRatingBonus(awayTeamId);
-    var homeOff = offenseRating(home) + homeChem;
-    var awayOff = offenseRating(away) + awayChem;
-    var homeDefEff = defenseRating(home) * 0.5 + goalieRating(home) * 0.5 + homeChem * 0.6;
-    var awayDefEff = defenseRating(away) * 0.5 + goalieRating(away) * 0.5 + awayChem * 0.6;
+    var Strategy = window.PHLStrategy;
+    var homeStrat = Strategy ? Strategy.strategyRatingBonus(homeTeamId) : { offense: 0, defense: 0 };
+    var awayStrat = Strategy ? Strategy.strategyRatingBonus(awayTeamId) : { offense: 0, defense: 0 };
+    var homeOff = offenseRating(home) + homeChem + homeStrat.offense;
+    var awayOff = offenseRating(away) + awayChem + awayStrat.offense;
+    var homeDefEff = defenseRating(home) * 0.5 + goalieRating(home) * 0.5 + homeChem * 0.6 + homeStrat.defense;
+    var awayDefEff = defenseRating(away) * 0.5 + goalieRating(away) * 0.5 + awayChem * 0.6 + awayStrat.defense;
 
     var BASE = 3.1;
     var noiseHome = 0.85 + Math.random() * 0.3;

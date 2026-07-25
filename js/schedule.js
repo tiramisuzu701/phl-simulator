@@ -9,13 +9,14 @@
   var container = null;
   var view = { division: null };
 
-  // The regular season now spans 14 calendar weeks, but games are only
-  // played on 12 of them — weeks 10-11 are the mid-season trade-deadline
-  // break (see js/calendar.js runRegularWeek and js/state.js
+  // The regular season now spans 22 calendar weeks — a 10-week first half,
+  // a 2-week trade-deadline break, and a 10-week second half — but games
+  // are only played on 20 of them; weeks 11-12 are the mid-season break
+  // (see js/calendar.js runRegularWeek and js/state.js
   // isTransactionWindowOpen). Games are labeled with their real calendar
   // week number so the schedule reads naturally around the gap.
-  var PLAYING_WEEKS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14];
-  var BREAK_WEEKS = [10, 11];
+  var PLAYING_WEEKS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22];
+  var BREAK_WEEKS = [11, 12];
 
   // Circle-method round robin. Returns an array of rounds; each round is an
   // array of [teamIdA, teamIdB] pairs. Handles odd team counts with a bye.
@@ -44,9 +45,9 @@
   // for a division (repeating/cycling the round-robin as many times as
   // needed, alternating home/away each full cycle for fairness), then
   // chunks them into weeks so every team plays exactly gamesPerWeek games
-  // per week — e.g. Pro (2 games/wk x 12wk = 24 games), Contender/Prospect
-  // (3/wk x 12wk = 36 games). Each chunk is labeled with the real calendar
-  // week number from `playingWeeks` (skipping the week 10-11 trade-deadline
+  // per week — e.g. Pro (2 games/wk x 20wk = 40 games), Contender/Prospect
+  // (3/wk x 20wk = 60 games). Each chunk is labeled with the real calendar
+  // week number from `playingWeeks` (skipping the week 11-12 trade-deadline
   // break — see PLAYING_WEEKS above) rather than a plain sequential index.
   // An odd team count still gets a bye each round (see roundRobinRounds),
   // so a team can occasionally fall short of the exact total — a known,
@@ -261,7 +262,7 @@
     var played = games.filter(function (g) { return g.played; }).length;
     html += '<div class="action-row">';
     html += '<span class="muted">' + played + ' / ' + games.length + ' games played &middot; Week ' +
-      (season.phase === "regular" ? season.calendarWeek : "—") + " of " + (S.getSettings().regularSeasonWeeks || 12) + "</span>";
+      (season.phase === "regular" ? season.calendarWeek : "—") + " of " + (S.getSettings().regularSeasonWeeks || 22) + "</span>";
     html += '<button class="btn btn-danger" data-action="regen-schedule">Regenerate Schedule</button>';
     html += "</div>";
 

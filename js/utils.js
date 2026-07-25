@@ -238,22 +238,33 @@
   // Each archetype nudges the hidden offense/defense/goaltending attributes
   // that actually drive the simulation, so picking one has a real effect
   // in-game even though the underlying numbers stay out of the UI.
+  // "Grinder", "Stay-at-Home Defenseman", "Standup", and "Butterfly" were
+  // historically only ever hand-authored into js/starterData.js's real-
+  // roster data — they were never added here, so archetypeBias() silently
+  // returned {} (no attribute effect) for every player carrying one of
+  // them, and js/strategy.js's archetype-based lineup matching couldn't
+  // recognize them either. Added as full archetypes now, each distinct
+  // from (but in the same family as) its nearest existing cousin.
   var ARCHETYPES = {
     F: [
       { name: "Goal Scorer", bias: { offense: 9, defense: -7 } },
       { name: "Playmaker", bias: { offense: 6, defense: -3 } },
       { name: "Two-Way Forward", bias: { offense: 1, defense: 3 } },
       { name: "Power Forward", bias: { offense: -3, defense: 6 } },
+      { name: "Grinder", bias: { offense: -6, defense: 5 } },
     ],
     D: [
       { name: "Offensive Defenseman", bias: { offense: 8, defense: -6 } },
       { name: "Two-Way Defenseman", bias: { offense: 1, defense: 2 } },
       { name: "Stalwart Defender", bias: { offense: -6, defense: 8 } },
+      { name: "Stay-at-Home Defenseman", bias: { offense: -7, defense: 7 } },
     ],
     G: [
       { name: "The Wall", bias: { goaltending: 6, offense: -4 } },
       { name: "Hybrid", bias: { goaltending: 2, offense: 2 } },
       { name: "Puck-Handler", bias: { goaltending: -2, offense: 7 } },
+      { name: "Standup", bias: { goaltending: 4, offense: -3 } },
+      { name: "Butterfly", bias: { goaltending: 5, offense: -1 } },
     ],
   };
 

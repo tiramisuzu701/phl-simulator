@@ -53,6 +53,19 @@
     if (d.logSeq == null) d.logSeq = 0;
     if (!d.notifications) d.notifications = [];
     if (!d.mvpAwards) d.mvpAwards = [];
+    if (!d.seasonAwards) d.seasonAwards = [];
+    if (!d.hallOfFame) d.hallOfFame = [];
+    // One-time migration: chemistry moved from a 0-100 scale (baseline 50)
+    // to a 0-25 scale (baseline 12) — see js/scrims.js. Any team that
+    // already had a chemistry value gets it proportionally rescaled
+    // (divided by 4 and rounded) exactly once; teams with no value yet
+    // just fall through to the per-team default-fill below.
+    if (!d.chemistryRescaledV2) {
+      d.teams.forEach(function (t) {
+        if (t.chemistry != null) t.chemistry = U.clamp(Math.round(t.chemistry / 4), 0, 25);
+      });
+      d.chemistryRescaledV2 = true;
+    }
     for (var key in starter.settings) {
       if (!(key in d.settings)) d.settings[key] = starter.settings[key];
     }
@@ -88,8 +101,14 @@
         if (starterTeam && starterTeam.logoUrl) t.logoUrl = starterTeam.logoUrl;
       }
       if (t.customColor === undefined) t.customColor = null;
-      if (t.chemistry == null) t.chemistry = 50;
-      if (t.scrimsThisWeek == null) t.scrimsThisWeek = 0;
+      // Chosen lineup system — see js/strategy.js. null means no strategy
+      // (a neutral baseline, no bonus or penalty).
+      if (t.strategy === undefined) t.strategy = null;
+      if (t.chemistry == null) t.chemistry = 12;
+      // scrimsThisWeek (a weekly cap) is retired in favor of a per-half /
+      // per-offseason budget — see js/scrims.js.
+      if (t.scrimsUsedThisSplit == null) t.scrimsUsedThisSplit = 0;
+      if (t.scrimsUsedThisOffseason == null) t.scrimsUsedThisOffseason = 0;
     });
     d.players.forEach(function (p) {
       if (!p.attributes) p.attributes = U.deriveAttributes(p.overall, p.position, p.archetype);
@@ -97,10 +116,14 @@
       if (p.retirementAge == null) p.retirementAge = U.retirementAgeFor(p.age);
       if (!p.stats) p.stats = freshStatLine();
       if (!p.playoffStats) p.playoffStats = freshStatLine();
+      if (!p.careerStats) p.careerStats = freshStatLine();
       if (p.statsAtHalf === undefined) p.statsAtHalf = null;
       if (p.starter == null) p.starter = false;
       if (p.nmc == null) p.nmc = false;
       if (!p.contractOfferHistory) p.contractOfferHistory = [];
+      // Discontent (see js/playerMessages.js) — 0-100, feeds a real asking-
+      // price premium in js/contracts.js effectiveAskingFor.
+      if (p.unhappiness == null) p.unhappiness = 0;
     });
     d.teams.forEach(function (t) {
       if (t.lastSeasonWins == null) t.lastSeasonWins = 0;
@@ -316,8 +339,39 @@
     });
     save();
   }
+  // Folds a player's just-finished season line into their running career
+  // total before it gets wiped for the new season — see
+  // resetPlayerSeasonStats below. Also called directly by
+  // js/stats.js ageAndDeclinePlayers for anyone retiring THIS cycle, since
+  // their final season's stats haven't been through a reset yet (see
+  // js/hallOfFame.js, which needs true lifetime totals to judge
+  // induction). Idempotent to call more than once in the same cycle is NOT
+  // safe (it would double-count) — callers must only call it once per
+  // player per season.
+  function accumulateCareerStats(p) {
+    if (!p.careerStats) p.careerStats = freshStatLine();
+    var cur = p.stats || freshStatLine();
+    var cs = p.careerStats;
+    cs.gp += cur.gp || 0;
+    cs.g += cur.g || 0;
+    cs.a += cur.a || 0;
+    cs.pts = cs.g + cs.a;
+    cs.plusMinus += cur.plusMinus || 0;
+    cs.shotsAgainst += cur.shotsAgainst || 0;
+    cs.saves += cur.saves || 0;
+    cs.goalsAgainst += cur.goalsAgainst || 0;
+    cs.svPct = cs.shotsAgainst > 0 ? U.round3(cs.saves / cs.shotsAgainst) : 0;
+    cs.gaa = cs.gp > 0 ? U.round1(cs.goalsAgainst / cs.gp) : 0;
+  }
   function resetPlayerSeasonStats() {
     data.players.forEach(function (p) {
+      // A retiree's final season is already folded into careerStats at the
+      // moment they retire (see js/stats.js ageAndDeclinePlayers, which
+      // calls accumulateCareerStats itself before Hall of Fame evaluation)
+      // — skip them here so that final season isn't double-counted, and
+      // their last stat line stays frozen instead of getting wiped.
+      if (p.retired) return;
+      accumulateCareerStats(p);
       p.stats = freshStatLine();
     });
     save();
@@ -502,6 +556,32 @@
     return entry;
   }
 
+  // ---------------- Season Awards (Rookie/Defenseman/Goalie/Player of the
+  // Year — see js/awards.js) -------------------------------------------
+  function getSeasonAwards() {
+    return data.seasonAwards;
+  }
+  function addSeasonAward(entry) {
+    entry.id = entry.id || U.uid("award");
+    data.seasonAwards.push(entry);
+    save();
+    return entry;
+  }
+
+  // ---------------- Hall of Fame (js/hallOfFame.js) -----------------------
+  function getHallOfFame() {
+    return data.hallOfFame;
+  }
+  function addHallOfFameEntry(entry) {
+    entry.id = entry.id || U.uid("hof");
+    data.hallOfFame.push(entry);
+    save();
+    return entry;
+  }
+  function isHallOfFamer(playerId) {
+    return data.hallOfFame.some(function (e) { return e.playerId === playerId; });
+  }
+
   // ---------------- Playoff stat tracking ---------------------------------
   // Wiped for a division's currently-rostered players each time that
   // division's bracket starts (see js/playoffs.js startPlayoffs) so playoff
@@ -515,10 +595,13 @@
   }
 
   // ---------------- Team chemistry (Scrims) --------------------------------
+  // 0-25 scale, baseline/default 12 — see js/scrims.js for how it's earned
+  // (opponent scrims) and decays (weekly upkeep), and js/sim.js
+  // chemistryRatingBonus for how it nudges game sim outcomes.
   function addChemistry(teamId, amount) {
     var t = getTeam(teamId);
     if (!t) return null;
-    t.chemistry = U.clamp((t.chemistry == null ? 50 : t.chemistry) + amount, 0, 100);
+    t.chemistry = U.clamp((t.chemistry == null ? 12 : t.chemistry) + amount, 0, 25);
     save();
     return t.chemistry;
   }
@@ -667,9 +750,9 @@
 
   // ---------------- Trade deadline / transaction window -------------------
   // True while trades, free-agent signings, and releases are allowed. The
-  // window is open all offseason and through the first 11 calendar weeks of
-  // the regular season (weeks 1-9 play games, 10-11 are the trade-deadline
-  // break) and closes league-wide from week 12 through the end of playoffs,
+  // window is open all offseason and through the first 12 calendar weeks of
+  // the regular season (weeks 1-10 play games, 11-12 are the trade-deadline
+  // break) and closes league-wide from week 13 through the end of playoffs,
   // reopening again once the next offseason begins. Note: this deliberately
   // does NOT gate js/aiManager.js's autoReleaseToCompliance() — that's a
   // forced cap-compliance safety valve, not a voluntary roster move.
@@ -677,7 +760,7 @@
     var season = data.season;
     if (!season) return true;
     if (season.phase === "offseason") return true;
-    if (season.phase === "regular") return (season.calendarWeek || 1) <= 11;
+    if (season.phase === "regular") return (season.calendarWeek || 1) <= 12;
     return false; // playoffs
   }
 
@@ -783,6 +866,13 @@
     removeNotification: removeNotification,
     getMvpAwards: getMvpAwards,
     addMvpAward: addMvpAward,
+    getSeasonAwards: getSeasonAwards,
+    addSeasonAward: addSeasonAward,
+    getHallOfFame: getHallOfFame,
+    addHallOfFameEntry: addHallOfFameEntry,
+    isHallOfFamer: isHallOfFamer,
+    accumulateCareerStats: accumulateCareerStats,
+    getSeasonNumber: getSeasonNumber,
     resetPlayoffStatsForDivision: resetPlayoffStatsForDivision,
     addChemistry: addChemistry,
   };

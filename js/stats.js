@@ -7,7 +7,7 @@
   var U = window.PHLUtil;
   var container = null;
   var divFilter = "";
-  var subTab = "leaders"; // "leaders" | "playoffs" | "awards" | "season"
+  var subTab = "leaders"; // "leaders" | "playoffs" | "awards" | "hof" | "season"
 
   function leaderboard(list, keyFn, limit, opts) {
     opts = opts || {};
@@ -65,6 +65,7 @@
     { key: "leaders", label: "League Leaders" },
     { key: "playoffs", label: "Playoff Leaders" },
     { key: "awards", label: "Awards" },
+    { key: "hof", label: "Hall of Fame" },
     { key: "season", label: "Season" },
   ];
 
@@ -84,7 +85,7 @@
       html += '<button class="chip' + (subTab === t.key ? " chip-active" : "") + '" data-subtab="' + t.key + '">' + t.label + "</button>";
     });
     html += "</div>";
-    if (subTab !== "season") {
+    if (subTab !== "season" && subTab !== "hof") {
       html += '<select id="stats-division">';
       divisions.forEach(function (d) {
         html += '<option value="' + d.id + '"' + (activeDiv === d.id ? " selected" : "") + ">" + U.escapeHtml(d.name) + "</option>";
@@ -96,6 +97,7 @@
     if (subTab === "leaders") html += renderLeadersView();
     else if (subTab === "playoffs") html += renderPlayoffLeadersView();
     else if (subTab === "awards") html += renderAwardsView();
+    else if (subTab === "hof") html += renderHallOfFameView();
     else html += renderSeasonView();
 
     container.innerHTML = html;
@@ -133,22 +135,52 @@
     return html;
   }
 
+  var SEASON_AWARD_LABEL = {
+    defenseman: "Defenseman of the Year",
+    goalie: "Goalie of the Year",
+    rookie: "Rookie of the Year",
+    "player-of-the-year": "Player of the Year",
+  };
+
   function renderAwardsView() {
-    var mvpAwards = S.getMvpAwards().filter(function (a) { return a.season === S.getSeason().seasonNumber; });
-    if (!mvpAwards.length) {
-      return '<div class="empty-state"><p>No awards announced yet this season — First-Half MVPs land at week 7, Second-Half at season\'s end, and Playoff Series MVPs as each series wraps up.</p></div>';
+    var seasonNumber = S.getSeason().seasonNumber;
+    var mvpAwards = S.getMvpAwards().filter(function (a) { return a.season === seasonNumber; });
+    var seasonAwards = S.getSeasonAwards().filter(function (a) { return a.season === seasonNumber; });
+    var combined = mvpAwards.concat(seasonAwards);
+    if (!combined.length) {
+      return '<div class="empty-state"><p>No awards announced yet this season — First-Half MVPs land at the midpoint of the season, the full Season Awards slate (Defenseman/Goalie/Rookie/Player of the Year) and Second-Half MVPs land at season\'s end, and Playoff Series MVPs as each series wraps up.</p></div>';
     }
-    var html = '<h3>Season ' + S.getSeason().seasonNumber + "</h3>";
+    var html = '<h3>Season ' + seasonNumber + "</h3>";
     html += '<div class="leaderboard-grid">';
-    mvpAwards.slice().reverse().forEach(function (a) {
+    combined.slice().reverse().forEach(function (a) {
       var p = S.getPlayer(a.playerId);
-      var div = S.getDivision(a.divisionId);
-      var label = a.type === "first-half" ? "First-Half MVP" : a.type === "second-half" ? "Second-Half MVP" : "Playoff Series MVP";
+      var div = a.divisionId ? S.getDivision(a.divisionId) : null;
+      var label = a.type === "first-half" ? "First-Half MVP" : a.type === "second-half" ? "Second-Half MVP" :
+        a.type === "playoff-series" ? "Playoff Series MVP" : (SEASON_AWARD_LABEL[a.type] || "Award");
       html += '<div class="leaderboard-card mvp-card"><span class="pill pill-mvp">&#127942; ' + U.escapeHtml(label) + '</span>' +
         '<h4>' + U.escapeHtml(p ? p.name : "?") + "</h4>" +
-        '<p class="muted small">' + U.escapeHtml(div ? div.name : "") + " Division</p></div>";
+        '<p class="muted small">' + (div ? U.escapeHtml(div.name) + " Division" : "League-wide") + "</p></div>";
     });
     html += "</div>";
+    return html;
+  }
+
+  function renderHallOfFameView() {
+    var inductees = S.getHallOfFame().slice().sort(function (a, b) { return (b.score || 0) - (a.score || 0); });
+    if (!inductees.length) {
+      return '<div class="empty-state"><p>No Hall of Famers yet — induction is automatic, evaluated the moment a player retires, based on a combination of career stats and career awards (MVPs, Season Awards). It takes a real career to clear the bar.</p></div>';
+    }
+    var html = '<p class="muted small">Automatic induction at retirement, based on a blend of career stats and career awards. ' + inductees.length + ' player(s) enshrined so far.</p>';
+    html += '<table class="data-table"><thead><tr><th>Player</th><th>Pos</th><th>Career GP</th><th>Career PTS / Record</th><th>Awards</th><th>Inducted</th></tr></thead><tbody>';
+    inductees.forEach(function (e) {
+      var cs = e.careerStats || S.freshStatLine();
+      var statLine = e.position === "G"
+        ? cs.gp + " GP, " + (cs.svPct * 100).toFixed(1) + "% SV, " + U.round1(cs.gaa) + " GAA"
+        : cs.pts + " PTS (" + cs.g + "G, " + cs.a + "A)";
+      html += "<tr><td>" + U.escapeHtml(e.playerName) + "</td><td>" + U.escapeHtml(e.position || "?") + "</td><td>" + cs.gp +
+        "</td><td>" + statLine + "</td><td>" + (e.awardCount || 0) + "</td><td>Season " + e.season + "</td></tr>";
+    });
+    html += "</tbody></table>";
     return html;
   }
 
@@ -226,8 +258,16 @@
       if (p.retirementAge == null) p.retirementAge = U.retirementAgeFor(p.age);
 
       if (p.age >= p.retirementAge) {
+        var lastTeamId = p.teamId;
         p.retired = true;
         p.teamId = null;
+        // Fold their just-completed final season into career totals before
+        // resetPlayerSeasonStats() would otherwise skip them (retirees are
+        // excluded there specifically so this doesn't double-count — see
+        // js/state.js), then let the Hall of Fame decide on induction off
+        // that true lifetime total.
+        S.accumulateCareerStats(p);
+        if (window.PHLHallOfFame) window.PHLHallOfFame.evaluateRetiree(p, lastTeamId);
         retired.push(p);
         return;
       }
@@ -341,9 +381,16 @@
         isDraftProspect: false,
         eligibleDivisions: eligibleDivisions,
         isRookieClass: true,
+        // Which season this rookie actually debuts in — scopes Rookie of
+        // the Year eligibility (see js/awards.js) to just this class, not
+        // every breakout rookie ever generated (isRookieClass alone never
+        // gets cleared, so it can't tell "this year's rookies" apart from
+        // "a rookie three seasons ago").
+        rookieSeason: S.getSeasonNumber(),
         age: rookieAge,
         retirementAge: U.retirementAgeFor(rookieAge),
         stats: S.freshStatLine(),
+        careerStats: S.freshStatLine(),
       };
       created.push(S.addPlayer(player));
     }

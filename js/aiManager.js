@@ -202,8 +202,8 @@
     if (!S.isTransactionWindowOpen()) return []; // deadline locked — see js/state.js isTransactionWindowOpen
     // Don't pile up offers — cap how many unresolved ones can be pending.
     var pendingOffers = S.getNotifications().filter(function (n) { return n.type === "trade-offer"; });
-    if (pendingOffers.length >= 3) return [];
-    if (Math.random() > 0.35) return []; // not every tick generates an offer
+    if (pendingOffers.length >= 5) return [];
+    if (Math.random() > 0.55) return []; // not every tick generates an offer
 
     var partners = S.getTeams(myTeam.division).filter(function (t) { return t.id !== myTeam.id; });
     if (!partners.length) return [];
