@@ -25,6 +25,9 @@
     { key: "actionable", label: "Needs Action", test: function (n) { return !!n.actionable; } },
     { key: "player-messages", label: "Player Messages", test: function (n) { return n.type === "player-message"; } },
     { key: "management-offers", label: "Management Offers", test: function (n) { return n.type === "management-offer"; } },
+    // Be A Player mode only (see js/careerMode.js) — contract offers,
+    // trade-request results, milestones, and the retirement send-off.
+    { key: "career", label: "My Career", test: function (n) { return n.type === "career" || n.type === "player-contract-offer"; } },
   ];
 
   function addNotification(entry) {
@@ -148,6 +151,8 @@
       league: "◎",
       "player-message": "\u{1F4AC}",
       "management-offer": "\u{1F454}",
+      "player-contract-offer": "\u{1F4B0}",
+      career: "★",
     };
     return icons[type] || "•";
   }
@@ -178,7 +183,7 @@
         html += '<div class="inbox-item-body">';
         html += '<div class="inbox-item-title">' + U.escapeHtml(n.title || "") + (n.read ? "" : ' <span class="pill pill-accent small">New</span>') + "</div>";
         html += '<div class="inbox-item-text muted small">' + U.escapeHtml(n.body || "") + "</div>";
-        if (n.actionable && (n.type === "trade-offer" || n.type === "management-offer")) {
+        if (n.actionable && (n.type === "trade-offer" || n.type === "management-offer" || n.type === "player-contract-offer")) {
           html += '<div class="form-actions">' +
             '<button class="btn btn-sm btn-primary" data-action="accept-offer" data-id="' + n.id + '">Accept</button>' +
             '<button class="btn btn-sm btn-danger" data-action="reject-offer" data-id="' + n.id + '">Reject</button></div>';
@@ -220,6 +225,8 @@
         if (notif.type === "management-offer") {
           if (!confirm("Accept this offer? You'll switch franchises immediately, and your current team becomes AI-managed. This can't be undone.")) return;
           resolveManagementOffer(notif, true);
+        } else if (notif.type === "player-contract-offer") {
+          if (window.PHLCareerMode) window.PHLCareerMode.resolveContractOffer(notif, true);
         } else {
           resolveTradeOffer(notif, true);
         }
@@ -232,6 +239,7 @@
         var notif = S.getNotifications().find(function (n) { return n.id === b.dataset.id; });
         if (!notif) return;
         if (notif.type === "management-offer") resolveManagementOffer(notif, false);
+        else if (notif.type === "player-contract-offer") { if (window.PHLCareerMode) window.PHLCareerMode.resolveContractOffer(notif, false); }
         else resolveTradeOffer(notif, false);
         render();
         if (window.PHLApp) window.PHLApp.refresh();

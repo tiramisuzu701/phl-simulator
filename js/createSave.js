@@ -21,6 +21,11 @@
   var STARTER = window.PHL_STARTER_DATA;
   var root = null;
 
+  // Which of the two independent save slots (see js/state.js GM_KEY /
+  // PLAYER_KEY) this page is currently working with — null until the user
+  // picks one from the top-level chooser (see renderTopChooser).
+  var pageMode = null; // "gm" | "player"
+
   var state = {
     mode: "existing", // "existing" | "expansion"
     divisionId: null,
@@ -30,6 +35,8 @@
     expColor: "#4f7cff",
     expLogoDataUrl: null,
   };
+
+  var playerForm = { name: "", position: "F", archetype: "" };
 
   function starterDivisions() {
     return STARTER.divisions.slice().sort(function (a, b) {
@@ -50,16 +57,132 @@
   function init() {
     root = document.getElementById("wizard-root");
     if (!root) return;
-    // Read-only inspection of whatever's currently saved (S.load() never
-    // writes to storage by itself) so we can warn before clobbering it.
+    renderTopChooser();
+  }
+
+  // ---------------- Top-level fork: which save slot? ----------------------
+  // GM Franchise and Be A Player are two entirely independent saves (see
+  // js/state.js GM_KEY / PLAYER_KEY / ACTIVE_MODE_KEY) — this is the one
+  // place that picks which of them the rest of this page (and the next
+  // index.html load) works with.
+  function renderTopChooser() {
+    var html = '<div class="form-card"><h3>How do you want to play?</h3>';
+    html += '<div class="mode-grid">';
+    html += '<button type="button" class="mode-card" data-topmode="gm"><h3>GM Franchise</h3>' +
+      "<p>Run a team: rosters, contracts, trades, and the Startup Draft are all yours to manage.</p></button>";
+    html += '<button type="button" class="mode-card" data-topmode="player"><h3>Be A Player</h3>' +
+      "<p>Create one player and live their career, game to game &mdash; an AI runs the rest of your team.</p></button>";
+    html += "</div></div>";
+    root.innerHTML = html;
+    root.querySelectorAll("[data-topmode]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        pageMode = b.dataset.topmode;
+        S.setActiveMode(pageMode);
+        enterMode();
+      });
+    });
+  }
+
+  function backLinkHtml() {
+    return '<p><a href="#" data-action="back-to-modes" class="muted small">&laquo; Choose a different mode</a></p>';
+  }
+  function wireBackLink() {
+    var back = root.querySelector('[data-action="back-to-modes"]');
+    if (back) back.addEventListener("click", function (e) {
+      e.preventDefault();
+      pageMode = null;
+      renderTopChooser();
+    });
+  }
+
+  // Reads whichever slot S.setActiveMode() just pointed at (S.load() never
+  // writes to storage by itself, so this is safe read-only inspection) and
+  // branches into that mode's own flow.
+  function enterMode() {
     var existing = S.load();
-    if (existing && existing.franchise && existing.franchise.teamId) {
-      renderExistingSaveWarning(existing);
+    if (pageMode === "gm") {
+      if (existing && existing.franchise && existing.franchise.teamId) {
+        renderExistingSaveWarning(existing);
+      } else {
+        renderWizard();
+      }
     } else {
-      renderWizard();
+      var mp = existing && existing.myPlayer;
+      if (mp && (mp.playerId || mp.pendingSendOff)) {
+        renderExistingPlayerSaveWarning(existing);
+      } else {
+        renderPlayerWizard();
+      }
     }
   }
 
+  function renderExistingPlayerSaveWarning(data) {
+    var mp = data.myPlayer || {};
+    var p = mp.playerId ? (data.players || []).find(function (pl) { return pl.id === mp.playerId; }) : null;
+    var html = backLinkHtml();
+    html += '<div class="empty-state">';
+    html += "<p>You already have a Be A Player career in progress" +
+      (p ? " as <strong>" + U.escapeHtml(p.name) + "</strong>" : mp.pendingSendOff ? " — a career send-off is waiting to be viewed" : "") +
+      ".</p>";
+    html += '<p class="muted small">Starting a new save below will permanently erase this one. Export it first from Data Tools if you want to keep it.</p>';
+    html += '<div class="form-actions" style="justify-content:center">';
+    html += '<a class="btn btn-primary" href="index.html">Continue This Save</a>';
+    html += '<button class="btn btn-danger" data-action="start-fresh-player">Start a Fresh Save Instead</button>';
+    html += "</div></div>";
+    root.innerHTML = html;
+    wireBackLink();
+    root.querySelector('[data-action="start-fresh-player"]').addEventListener("click", function () {
+      renderPlayerWizard();
+    });
+  }
+
+  // ---------------- Be A Player wizard -------------------------------------
+  function renderPlayerWizard() {
+    var position = playerForm.position;
+    if (!playerForm.archetype || !U.archetypesFor(position).some(function (a) { return a.name === playerForm.archetype; })) {
+      playerForm.archetype = U.randomArchetype(position);
+    }
+    var posLabels = { F: "Forward", D: "Defense", G: "Goalie" };
+    var html = backLinkHtml();
+    html += '<div class="form-card"><h3>Create Your Player</h3>';
+    html += '<p class="muted small">You\'ll enter the league as a rookie prospect and land on a Prospect-division team through a lightweight amateur draft placement &mdash; an AI runs everything else about that team (roster, contracts, trades, lineup). You just play.</p>';
+    html += '<div class="form-grid">';
+    html += '<label>Name<input type="text" id="p-name" value="' + U.escapeHtml(playerForm.name) + '" placeholder="Leave blank for a random gamertag"></label>';
+    html += '<label>Position<select id="p-position">' + ["F", "D", "G"].map(function (pos) {
+      return '<option value="' + pos + '"' + (pos === position ? " selected" : "") + ">" + posLabels[pos] + "</option>";
+    }).join("") + "</select></label>";
+    html += '<label>Archetype<select id="p-archetype">' + U.archetypesFor(position).map(function (a) {
+      return '<option value="' + U.escapeHtml(a.name) + '"' + (a.name === playerForm.archetype ? " selected" : "") + ">" + U.escapeHtml(a.name) + "</option>";
+    }).join("") + "</select></label>";
+    html += "</div></div>";
+    html += '<div class="wizard-footer"><button class="btn btn-primary" data-action="submit-player">Enter the League &raquo;</button></div>';
+    root.innerHTML = html;
+    wireBackLink();
+    wirePlayerWizardEvents();
+  }
+
+  function wirePlayerWizardEvents() {
+    var nameInput = root.querySelector("#p-name");
+    if (nameInput) nameInput.addEventListener("input", function (e) { playerForm.name = e.target.value; });
+    var posSel = root.querySelector("#p-position");
+    if (posSel) posSel.addEventListener("change", function (e) {
+      playerForm.position = e.target.value;
+      playerForm.archetype = U.randomArchetype(playerForm.position);
+      renderPlayerWizard();
+    });
+    var archSel = root.querySelector("#p-archetype");
+    if (archSel) archSel.addEventListener("change", function (e) { playerForm.archetype = e.target.value; });
+    root.querySelector('[data-action="submit-player"]').addEventListener("click", submitPlayerWizard);
+  }
+
+  function submitPlayerWizard() {
+    S.resetToStarter(); // a fresh league in the player slot (active mode is already "player" — see enterMode)
+    window.PHLCareerMode.createPlayerAndEnterDraft({ name: playerForm.name, position: playerForm.position, archetype: playerForm.archetype });
+    window.location.href = "index.html";
+  }
+
+  // ---------------- GM Franchise wizard (unchanged from before Be A Player
+  // mode existed, aside from the back link) ---------------------------------
   function renderExistingSaveWarning(data) {
     var team = data.teams.find(function (t) {
       return t.id === data.franchise.teamId;
@@ -67,7 +190,8 @@
     var div = data.divisions.find(function (d) {
       return d.id === data.franchise.divisionId;
     });
-    var html = '<div class="empty-state">';
+    var html = backLinkHtml();
+    html += '<div class="empty-state">';
     html +=
       "<p>You already have a save in progress &mdash; you're GM of <strong>" +
       U.escapeHtml(team ? team.name : "your team") +
@@ -81,6 +205,7 @@
     html += '<button class="btn btn-danger" data-action="start-fresh">Start a Fresh Save Instead</button>';
     html += "</div></div>";
     root.innerHTML = html;
+    wireBackLink();
     root.querySelector('[data-action="start-fresh"]').addEventListener("click", function () {
       renderWizard();
     });
@@ -148,8 +273,9 @@
     var divisions = starterDivisions();
     if (!state.divisionId) state.divisionId = divisions[0].id;
 
-    var html = '<div class="form-card">';
-    html += "<h3>How do you want to play?</h3>";
+    var html = backLinkHtml();
+    html += '<div class="form-card">';
+    html += "<h3>Which kind of team?</h3>";
     html += '<div class="mode-grid">';
     html += modeCard("existing", "Manage an Existing Team", "Take over one of the league's existing teams. Startup Draft: 8 rounds per phase.");
     html += modeCard("expansion", "Create an Expansion Franchise", "Found a brand-new team that joins the league from scratch. Startup Draft: 6 rounds per phase.");
@@ -189,6 +315,7 @@
     html += "</div>";
 
     root.innerHTML = html;
+    wireBackLink();
     wireWizardEvents();
   }
 

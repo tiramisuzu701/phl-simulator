@@ -6,7 +6,16 @@
 (function () {
   "use strict";
 
-  var STORAGE_KEY = "phl_simulator_save_v1";
+  // Two independently-persisted saves live side by side: "gm" (Franchise
+  // Manager) and "player" (Be A Player). GM_KEY is unchanged from before Be
+  // A Player mode existed, on purpose — an existing GM save must keep
+  // loading from exactly the key it was already written under. A small,
+  // separate (non-JSON) pointer key remembers which of the two the app
+  // should load on the next page boot; create-save.html is the only place
+  // that ever changes it (see js/createSave.js).
+  var GM_KEY = "phl_simulator_save_v1";
+  var PLAYER_KEY = "phl_simulator_save_player_v1";
+  var ACTIVE_MODE_KEY = "phl_simulator_active_mode_v1";
   var U = window.PHLUtil;
   var data = null;
 
@@ -14,16 +23,51 @@
     return JSON.parse(JSON.stringify(obj));
   }
 
+  function storageKeyForMode(mode) {
+    return mode === "player" ? PLAYER_KEY : GM_KEY;
+  }
+
+  // Which save the app should work on right now. Defaults to "gm" so an
+  // existing installation (which never wrote ACTIVE_MODE_KEY at all) keeps
+  // booting straight into its GM save exactly as before.
+  function activeMode() {
+    try {
+      var m = localStorage.getItem(ACTIVE_MODE_KEY);
+      return m === "player" ? "player" : "gm";
+    } catch (e) {
+      return "gm";
+    }
+  }
+  function setActiveMode(mode) {
+    try {
+      localStorage.setItem(ACTIVE_MODE_KEY, mode === "player" ? "player" : "gm");
+    } catch (e) {
+      console.warn("Could not persist active save mode:", e);
+    }
+  }
+  // Does a save already exist in the given slot (or the active one, if no
+  // argument), without disturbing whichever slot is currently loaded? Used
+  // by create-save.html to show "Continue" vs. "Start Fresh" per mode.
+  function slotHasSave(mode) {
+    try {
+      return !!localStorage.getItem(storageKeyForMode(mode || activeMode()));
+    } catch (e) {
+      return false;
+    }
+  }
+
   function load() {
+    var mode = activeMode();
     var raw = null;
     try {
-      raw = localStorage.getItem(STORAGE_KEY);
+      raw = localStorage.getItem(storageKeyForMode(mode));
     } catch (e) {
       console.warn("localStorage unavailable:", e);
     }
     if (raw) {
       try {
         data = JSON.parse(raw);
+        data.mode = data.mode || mode;
         migrate(data);
         return data;
       } catch (e) {
@@ -31,6 +75,7 @@
       }
     }
     data = deepClone(window.PHL_STARTER_DATA);
+    data.mode = mode;
     migrate(data);
     return data;
   }
@@ -38,6 +83,20 @@
   // Fill in any fields older saves might be missing (forward-compatible).
   function migrate(d) {
     var starter = window.PHL_STARTER_DATA;
+    // "gm" = you're the GM/manager (the original game). "player" = Be A
+    // Player mode (see js/careerMode.js) — you ARE one player on the
+    // league, an AI runs the rest of your team. Any save from before Be A
+    // Player mode existed has neither field and defaults to "gm".
+    if (!d.mode) d.mode = "gm";
+    if (!d.myPlayer) d.myPlayer = { playerId: null };
+    // Be A Player mode extras (js/careerMode.js) — backfilled individually
+    // so an older player-mode save (from before one of these existed)
+    // still picks it up, same spirit as every other field below.
+    if (d.myPlayer.tradeRequested == null) d.myPlayer.tradeRequested = false;
+    if (d.myPlayer.gameplanChoice === undefined) d.myPlayer.gameplanChoice = null;
+    if (!d.myPlayer.pastCareers) d.myPlayer.pastCareers = [];
+    if (d.myPlayer.pendingSendOff === undefined) d.myPlayer.pendingSendOff = null;
+    if (!d.myPlayer.milestonesHit) d.myPlayer.milestonesHit = [];
     if (!d.settings) d.settings = deepClone(starter.settings);
     if (!d.season) d.season = deepClone(starter.season);
     if (!d.draft) d.draft = deepClone(starter.draft);
@@ -145,14 +204,20 @@
 
   function save() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      localStorage.setItem(storageKeyForMode(data.mode), JSON.stringify(data));
     } catch (e) {
       console.warn("Could not save to localStorage:", e);
     }
   }
 
+  // Resets whichever slot is CURRENTLY active (see activeMode) back to a
+  // fresh league. Be A Player mode and GM mode both start from the exact
+  // same underlying league data — they only diverge in d.mode and how the
+  // rest of the app reads it from there.
   function resetToStarter() {
+    var mode = activeMode();
     data = deepClone(window.PHL_STARTER_DATA);
+    data.mode = mode;
     migrate(data);
     save();
   }
@@ -614,6 +679,33 @@
     return !!teamId && data.franchise.teamId === teamId;
   }
 
+  // ---------------- Be A Player mode (js/careerMode.js) -------------------
+  function isBeAPlayerMode() {
+    return data.mode === "player";
+  }
+  function getMyPlayer() {
+    return data.myPlayer;
+  }
+  function setMyPlayerId(playerId) {
+    data.myPlayer.playerId = playerId;
+    save();
+  }
+  // The team relevant to whoever's playing this save, regardless of mode:
+  // the GM's managed team in a GM save, or your own player's CURRENT team
+  // in a Be A Player save (kept live by just reading the player's teamId —
+  // it moves on its own as trades/promotions/free agency happen, with
+  // nothing extra to keep in sync). Deliberately NOT the same thing as
+  // isManagedTeam()/franchise.teamId — your Be A Player team is still
+  // entirely AI-run (see js/aiManager.js), you just always suit up for it
+  // (see js/sim.js forcePlayerId).
+  function myTeamId() {
+    if (isBeAPlayerMode()) {
+      var mp = data.myPlayer && data.myPlayer.playerId ? getPlayer(data.myPlayer.playerId) : null;
+      return mp ? mp.teamId : null;
+    }
+    return data.franchise.teamId;
+  }
+
   // Is `teamId` the user's own team, or another team in the user's own
   // division? Used to scope league-wide push notifications (Inbox entries
   // for AI trades, MVP awards, division championships, etc. — see
@@ -623,8 +715,10 @@
   // affected by this — they keep showing every event league-wide.
   function isUserRelevantTeam(teamId) {
     if (!teamId) return false;
-    if (isManagedTeam(teamId)) return true;
-    var myTeam = getTeam(data.franchise.teamId);
+    var mine = myTeamId();
+    if (!mine) return false;
+    if (mine === teamId) return true;
+    var myTeam = getTeam(mine);
     var t = getTeam(teamId);
     return !!(myTeam && t && myTeam.division === t.division);
   }
@@ -875,5 +969,14 @@
     getSeasonNumber: getSeasonNumber,
     resetPlayoffStatsForDivision: resetPlayoffStatsForDivision,
     addChemistry: addChemistry,
+    // ---- Multi-slot save switching (GM vs Be A Player) — see js/createSave.js
+    activeMode: activeMode,
+    setActiveMode: setActiveMode,
+    slotHasSave: slotHasSave,
+    // ---- Be A Player mode — see js/careerMode.js
+    isBeAPlayerMode: isBeAPlayerMode,
+    getMyPlayer: getMyPlayer,
+    setMyPlayerId: setMyPlayerId,
+    myTeamId: myTeamId,
   };
 })();

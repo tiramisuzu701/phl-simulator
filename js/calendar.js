@@ -21,9 +21,16 @@
   }
 
   function isSetupComplete() {
-    var franchise = S.getFranchise();
     var sd = S.getStartupDraft();
-    return !!(franchise && franchise.teamId && sd && sd.status === "complete");
+    if (!sd || sd.status !== "complete") return false;
+    // Be A Player mode never sets data.franchise.teamId (see js/state.js
+    // myTeamId — that's what keeps every team, including your own player's,
+    // fully AI-managed). The Startup Draft finishing headless (see
+    // js/app.js initBeAPlayer / js/careerMode.js) is the only setup step
+    // that mode needs.
+    if (S.isBeAPlayerMode()) return true;
+    var franchise = S.getFranchise();
+    return !!(franchise && franchise.teamId);
   }
 
   function maxPlayoffWeeks() {
@@ -92,26 +99,30 @@
   // trade-deadline break week, or the user's team has a bye this week — in
   // every one of those cases Advance Week should NOT be gated.
   function myUnplayedGamesThisWeek() {
-    var franchise = S.getFranchise();
-    if (!franchise || !franchise.teamId) return [];
+    // S.myTeamId() reads franchise.teamId in GM mode and your own player's
+    // current teamId in Be A Player mode (see js/state.js) — same "This
+    // Week" panel now works for both without duplicating this logic.
+    var teamId = S.myTeamId();
+    if (!teamId) return [];
     var season = S.getSeason();
     if (season.phase !== "regular") return [];
     if (BREAK_WEEKS.indexOf(season.calendarWeek) !== -1) return [];
     return S.getSchedule().filter(function (g) {
       return g.week === season.calendarWeek && !g.played &&
-        (g.homeTeamId === franchise.teamId || g.awayTeamId === franchise.teamId);
+        (g.homeTeamId === teamId || g.awayTeamId === teamId);
     });
   }
 
   // Simulates just the user's own game(s) for the current week (called from
-  // the Dashboard's "Sim My Game" button) so the player can see their own
-  // box score before the rest of the league's games play out via Advance
-  // Week. Returns the now-played games (with boxscore attached) so the
-  // caller can pop up the result.
+  // the Dashboard's "Sim My Game" button, or My Career's equivalent in Be A
+  // Player mode) so the player can see their own box score before the rest
+  // of the league's games play out via Advance Week. Returns the now-played
+  // games (with boxscore attached) so the caller can pop up the result.
   function simulateMyGamesThisWeek() {
     var games = myUnplayedGamesThisWeek();
     if (!games.length || !Sim) return [];
-    games.forEach(function (g) { Sim.simulateAndApply(g); });
+    var opts = window.PHLCareerMode ? window.PHLCareerMode.activeSimOpts() : null;
+    games.forEach(function (g) { Sim.simulateAndApply(g, opts); });
     S.save();
     return games;
   }
@@ -277,6 +288,10 @@
     if (Scrims) Scrims.weeklyChemistryUpkeep();
     if (window.PHLPlayerMessages) window.PHLPlayerMessages.weeklyCheck();
     if (window.PHLStrategy) window.PHLStrategy.autoAssignAiStrategies();
+    // Be A Player mode only (no-ops instantly in GM mode) — contract-offer
+    // generation, "trade me" resolution, career milestones, and retirement
+    // detection. See js/careerMode.js.
+    if (window.PHLCareerMode) window.PHLCareerMode.weeklyCheck();
 
     var season = S.getSeason();
     var summary = [];
@@ -284,6 +299,12 @@
     else if (season.phase === "regular") runRegularWeek(season, summary);
     else if (season.phase === "playoffs") runPlayoffsWeek(season, summary);
     else summary.push("Nothing to advance.");
+
+    // This week's game(s) (just simulated above, whether via this call or a
+    // prior "Sim My Game" preview) have already consumed this week's
+    // gameplan choice — clear it so next week starts fresh. See
+    // js/careerMode.js activeSimOpts / setGameplanChoice.
+    if (window.PHLCareerMode) window.PHLCareerMode.clearGameplanChoiceForNextWeek();
 
     return { advanced: true, summary: summary };
   }

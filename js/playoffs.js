@@ -164,7 +164,8 @@
     var homeIsASlot = SERIES_HOME_IS_A[gameNum - 1];
     var homeId = homeIsASlot ? series.teamAId : series.teamBId;
     var awayId = homeIsASlot ? series.teamBId : series.teamAId;
-    var result = Sim.simulateGame(homeId, awayId);
+    var opts = window.PHLCareerMode ? window.PHLCareerMode.activeSimOpts() : null;
+    var result = Sim.simulateGame(homeId, awayId, opts);
     Sim.applyPlayoffGame(result);
     var homeIsA = homeId === series.teamAId;
     var aScore = homeIsA ? result.homeScore : result.awayScore;

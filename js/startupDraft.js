@@ -120,7 +120,11 @@
 
   function startDraft() {
     var fr = S.getFranchise();
-    if (!fr.teamId) {
+    // Be A Player mode never sets franchise.teamId (see js/state.js
+    // myTeamId) — its Startup Draft runs headless, entirely auto-drafted,
+    // right when the career is created (see js/app.js initBeAPlayer), so
+    // this guard only applies to GM mode.
+    if (!fr.teamId && !S.isBeAPlayerMode()) {
       alert("No franchise is set up for this save yet — head to Create Save first.");
       return;
     }

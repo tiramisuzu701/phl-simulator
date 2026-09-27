@@ -35,6 +35,23 @@
     return picked;
   }
 
+  // Guarantees `forceId` (when it's on this roster, at this position) ends
+  // up in the returned group — swapping out whichever pick ranks weakest by
+  // the same criterion the group was already sorted by, if it isn't there
+  // already. Used by Be A Player mode (see js/careerMode.js) so your own
+  // player always suits up even on a team that would otherwise rotate them
+  // out — everything else about that team's lineup stays exactly as
+  // AI-driven as any other team's.
+  function ensureIncluded(picked, atPos, forceId, count) {
+    if (!forceId) return picked;
+    if (picked.some(function (p) { return p.id === forceId; })) return picked;
+    var forced = atPos.find(function (p) { return p.id === forceId; });
+    if (!forced) return picked; // not on this roster / not this position — nothing to force
+    var result = picked.slice(0, count - 1);
+    result.push(forced);
+    return result;
+  }
+
   // Picks `count` players at `position` for the active lineup. If the user
   // has manually flagged enough players as starters at that position (see
   // the Players tab), those are used (best-overall-first among them).
@@ -44,24 +61,50 @@
   // instead rotates through its depth with a weighted random pick — AI-managed
   // teams never set the `starter` flag, so they always hit this path when
   // it isn't the playoffs, giving bench players real (if less frequent)
-  // playing time instead of the same lineup every week.
-  function pickLineupGroup(roster, position, count, teamId) {
+  // playing time instead of the same lineup every week. `forceId` (optional)
+  // guarantees that one player is included regardless of any of the above —
+  // see ensureIncluded.
+  function pickLineupGroup(roster, position, count, teamId, forceId) {
     var atPos = roster.filter(function (p) { return p.position === position; });
     var starters = atPos.filter(function (p) { return !!p.starter; }).sort(byOverallDesc);
-    if (starters.length >= count) return starters.slice(0, count);
+    if (starters.length >= count) return ensureIncluded(starters.slice(0, count), atPos, forceId, count);
     var phase = (S.getSeason() || {}).phase;
     var rotate = teamId && !S.isManagedTeam(teamId) && phase !== "playoffs";
     if (rotate && atPos.length > count) {
-      return weightedRotationPick(atPos, count);
+      return ensureIncluded(weightedRotationPick(atPos, count), atPos, forceId, count);
     }
-    return atPos.sort(byOverallDesc).slice(0, count);
+    return ensureIncluded(atPos.sort(byOverallDesc).slice(0, count), atPos, forceId, count);
   }
 
-  function getActiveLineup(teamId) {
+  // `opts` (optional, additive-only — omitting it reproduces the exact
+  // prior behavior) supports Be A Player mode (js/careerMode.js):
+  //   opts.forcePlayerId  — guarantee this player dresses for their team,
+  //                         whichever side of this game that team is on.
+  //   opts.attributeBoost — { offense, defense, goaltending } deltas applied
+  //                         to forcePlayerId's in-lineup rating for just
+  //                         this one simulated game (a pre-game gameplan
+  //                         choice's effect) — never persisted to the real
+  //                         player record, since this only touches a
+  //                         shallow clone used for THIS calculation.
+  function getActiveLineup(teamId, opts) {
     var roster = S.getRoster(teamId);
-    var forwards = pickLineupGroup(roster, "F", 2, teamId);
-    var defenders = pickLineupGroup(roster, "D", 2, teamId);
-    var goalies = pickLineupGroup(roster, "G", 1, teamId);
+    var forceId = opts && opts.forcePlayerId;
+    var boost = opts && opts.attributeBoost;
+    if (forceId && boost) {
+      roster = roster.map(function (p) {
+        if (p.id !== forceId) return p;
+        var clone = Object.assign({}, p);
+        clone.attributes = {
+          offense: U.clamp(p.attributes.offense + (boost.offense || 0), 40, 99),
+          defense: U.clamp(p.attributes.defense + (boost.defense || 0), 40, 99),
+          goaltending: U.clamp(p.attributes.goaltending + (boost.goaltending || 0), 40, 99),
+        };
+        return clone;
+      });
+    }
+    var forwards = pickLineupGroup(roster, "F", 2, teamId, forceId);
+    var defenders = pickLineupGroup(roster, "D", 2, teamId, forceId);
+    var goalies = pickLineupGroup(roster, "G", 1, teamId, forceId);
     var goalie = goalies.length ? goalies[0] : null;
     return { forwards: forwards, defenders: defenders, goalie: goalie };
   }
@@ -103,10 +146,13 @@
   }
 
   // Simulates one game between two teams. Does NOT mutate state — returns a
-  // result object. Call applyResult() to persist it.
-  function simulateGame(homeTeamId, awayTeamId) {
-    var home = getActiveLineup(homeTeamId);
-    var away = getActiveLineup(awayTeamId);
+  // result object. Call applyResult() to persist it. `opts` (optional) is
+  // forwarded to getActiveLineup on whichever side `opts.forcePlayerId`'s
+  // team happens to be — see there for what it does.
+  function simulateGame(homeTeamId, awayTeamId, opts) {
+    var forceId = opts && opts.forcePlayerId;
+    var home = getActiveLineup(homeTeamId, forceId && S.getPlayer(forceId) && S.getPlayer(forceId).teamId === homeTeamId ? opts : null);
+    var away = getActiveLineup(awayTeamId, forceId && S.getPlayer(forceId) && S.getPlayer(forceId).teamId === awayTeamId ? opts : null);
 
     var homeChem = chemistryRatingBonus(homeTeamId);
     var awayChem = chemistryRatingBonus(awayTeamId);
@@ -280,8 +326,8 @@
     S.save();
   }
 
-  function simulateAndApply(game) {
-    var result = simulateGame(game.homeTeamId, game.awayTeamId);
+  function simulateAndApply(game, opts) {
+    var result = simulateGame(game.homeTeamId, game.awayTeamId, opts);
     applyResult(game, result);
     return result;
   }

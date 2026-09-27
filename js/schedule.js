@@ -119,7 +119,13 @@
   // regular season — see js/calendar.js.
   function simulateCalendarWeek(weekNumber) {
     var games = S.getSchedule().filter(function (g) { return g.week === weekNumber && !g.played; });
-    games.forEach(function (g) { Sim.simulateAndApply(g); });
+    // Be A Player mode only (null/no-op in GM mode) — guarantees your own
+    // player suits up for their team's game(s) this week, and applies any
+    // pre-game gameplan choice. Safe to pass to every game: sim.js only
+    // actually applies it to whichever side's team the forced player is
+    // currently on, if any (see js/sim.js simulateGame). See js/careerMode.js.
+    var opts = window.PHLCareerMode ? window.PHLCareerMode.activeSimOpts() : null;
+    games.forEach(function (g) { Sim.simulateAndApply(g, opts); });
     S.save();
     return games.length;
   }

@@ -9,6 +9,7 @@
 
   var modules = {
     dashboard: window.PHLDashboard,
+    mycareer: window.PHLCareerMode,
     startup: window.PHLStartupDraft,
     office: window.PHLOffice,
     teams: window.PHLTeams,
@@ -28,6 +29,7 @@
 
   var TAB_LABELS = {
     dashboard: "Dashboard",
+    mycareer: "My Career",
     startup: "Startup Draft",
     office: "Office",
     teams: "Teams",
@@ -127,10 +129,43 @@
     var draftDone = !!(sd && sd.status === "complete");
     var startupNav = document.querySelector('.nav-item[data-tab="startup"]');
     var officeNav = document.querySelector('.nav-item[data-tab="office"]');
-    if (startupNav) startupNav.style.display = draftDone ? "none" : "";
-    if (officeNav) officeNav.style.display = draftDone ? "" : "none";
-    if (draftDone && currentTab === "startup") {
-      showTab("office");
+    var dashboardNav = document.querySelector('.nav-item[data-tab="dashboard"]');
+    var myCareerNav = document.querySelector('.nav-item[data-tab="mycareer"]');
+    var tradesNav = document.querySelector('.nav-item[data-tab="trades"]');
+    var promotionsNav = document.querySelector('.nav-item[data-tab="promotions"]');
+    var strategyNav = document.querySelector('.nav-item[data-tab="strategy"]');
+    var scrimsNav = document.querySelector('.nav-item[data-tab="scrims"]');
+
+    if (S.isBeAPlayerMode()) {
+      // Be A Player: zero GM control, so none of the roster/contract/
+      // trade/strategy management tabs apply — the Startup Draft also runs
+      // headless (see initBeAPlayer below), so it never shows either. "My
+      // Career" replaces Dashboard as the mode's home tab.
+      if (startupNav) startupNav.style.display = "none";
+      if (officeNav) officeNav.style.display = "none";
+      if (dashboardNav) dashboardNav.style.display = "none";
+      if (tradesNav) tradesNav.style.display = "none";
+      if (promotionsNav) promotionsNav.style.display = "none";
+      if (strategyNav) strategyNav.style.display = "none";
+      if (scrimsNav) scrimsNav.style.display = "none";
+      if (myCareerNav) myCareerNav.style.display = "";
+      var hiddenForPlayerMode = ["startup", "office", "dashboard", "trades", "promotions", "strategy", "scrims"];
+      if (hiddenForPlayerMode.indexOf(currentTab) !== -1) {
+        showTab("mycareer");
+      }
+    } else {
+      if (myCareerNav) myCareerNav.style.display = "none";
+      if (tradesNav) tradesNav.style.display = "";
+      if (promotionsNav) promotionsNav.style.display = "";
+      if (strategyNav) strategyNav.style.display = "";
+      if (scrimsNav) scrimsNav.style.display = "";
+      if (dashboardNav) dashboardNav.style.display = "";
+      if (startupNav) startupNav.style.display = draftDone ? "none" : "";
+      if (officeNav) officeNav.style.display = draftDone ? "" : "none";
+      if (draftDone && currentTab === "startup") {
+        showTab("office");
+      }
+      if (currentTab === "mycareer") showTab("dashboard");
     }
   }
 
@@ -156,6 +191,20 @@
   function updateSidebarFranchise() {
     var el = document.getElementById("sidebar-franchise");
     if (!el) return;
+    if (S.isBeAPlayerMode()) {
+      var mp = S.getMyPlayer();
+      var p = mp && mp.playerId ? S.getPlayer(mp.playerId) : null;
+      if (!p) {
+        el.innerHTML = '<div class="sidebar-franchise-empty muted small">Career over — visit My Career to start a new one.</div>';
+        return;
+      }
+      var pTeam = p.teamId ? S.getTeam(p.teamId) : null;
+      el.innerHTML =
+        (pTeam ? '<div class="sidebar-team-badge">' + U.crestHtml(pTeam, "crest-lg") + "</div>" : "") +
+        '<div class="sidebar-team-name">' + U.escapeHtml(p.name) + "</div>" +
+        '<div class="sidebar-team-sub">' + U.escapeHtml(p.position) + (pTeam ? " &middot; " + U.escapeHtml(pTeam.name) : " &middot; Free Agent") + "</div>";
+      return;
+    }
     var franchise = S.getFranchise();
     var team = franchise && franchise.teamId ? S.getTeam(franchise.teamId) : null;
     if (!team) {
@@ -226,6 +275,10 @@
       S.save();
       alert("Progress saved. Your league lives in this browser — use Data Tools to export a portable backup any time.");
     });
+    if (S.isBeAPlayerMode()) {
+      initBeAPlayer();
+      return;
+    }
     // A save with no franchise team chosen yet (a brand-new save, or one
     // reset via Data Tools) has nothing for the app to show — division/team
     // (and, optionally, an Expansion Franchise) are picked once, up front,
@@ -242,6 +295,32 @@
     var startupDraft = S.getStartupDraft();
     var needsSetup = startupDraft && startupDraft.status !== "complete";
     showTab(needsSetup ? "startup" : "dashboard");
+  }
+
+  // Be A Player mode's own boot path — no franchise.teamId is ever set (see
+  // js/state.js myTeamId), and there's no pick-by-pick Startup Draft board
+  // to show (zero GM control): the whole league's initial rosters get
+  // filled automatically, once, the very first time this mode's save loads,
+  // then every load after that just lands on My Career.
+  function initBeAPlayer() {
+    var mp = S.getMyPlayer();
+    if (!mp || (!mp.playerId && !mp.pendingSendOff)) {
+      // No active player and nothing pending review — this save never
+      // finished being created (or was reset) — back to Create Save.
+      window.location.href = "create-save.html";
+      return;
+    }
+    var sd = S.getStartupDraft();
+    if (!sd || sd.status !== "complete") {
+      if (sd && sd.status === "not_started" && window.PHLStartupDraft) {
+        window.PHLStartupDraft.startDraft();
+      }
+      if (window.PHLStartupDraft) window.PHLStartupDraft.autoDraftRemaining();
+      if (window.PHLSchedule && !(S.getSchedule() || []).length) {
+        window.PHLSchedule.generateSeasonSchedule();
+      }
+    }
+    showTab("mycareer");
   }
 
   window.PHLApp = { showTab: showTab, refresh: refresh, refreshAll: refreshAll, showTeamDetail: showTeamDetail };
