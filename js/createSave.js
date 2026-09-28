@@ -120,9 +120,9 @@
     var html = backLinkHtml();
     html += '<div class="empty-state">';
     html += "<p>You already have a Be A Player career in progress" +
-      (p ? " as <strong>" + U.escapeHtml(p.name) + "</strong>" : mp.pendingSendOff ? " — a career send-off is waiting to be viewed" : "") +
+      (p ? " as <strong>" + U.escapeHtml(p.name) + "</strong> (" + p.overall + " OVR)" : mp.pendingSendOff ? " — a career send-off is waiting to be viewed" : "") +
       ".</p>";
-    html += '<p class="muted small">Starting a new save below will permanently erase this one. Export it first from Data Tools if you want to keep it.</p>';
+    html += '<p class="muted small">Continuing keeps that player exactly as they are. To go through tryouts and the amateur draft with a brand-new player, choose <strong>Start a Fresh Save</strong> &mdash; that permanently erases this one (export it first from Data Tools if you want to keep it).</p>';
     html += '<div class="form-actions" style="justify-content:center">';
     html += '<a class="btn btn-primary" href="index.html">Continue This Save</a>';
     html += '<button class="btn btn-danger" data-action="start-fresh-player">Start a Fresh Save Instead</button>';
@@ -135,12 +135,18 @@
   }
 
   // ---------------- Be A Player wizard -------------------------------------
-  // The actual multi-step tryouts -> draft day flow lives in
-  // js/careerMode.js (shared with My Career's own "no player yet" / send-off
-  // screens for every career after a retirement) — this page just resets to
-  // a fresh starter league in the player slot and mounts that shared flow.
+  // Builds a fresh league in the player slot, runs its Startup Draft
+  // headlessly right away (so every team already has its real roster by
+  // the time you're looking at tryout invitations and the amateur draft),
+  // then mounts the shared career-creation flow from js/careerMode.js
+  // (create -> invitations -> tryouts -> scouting report -> draft day).
   function renderPlayerWizard() {
-    S.resetToStarter(); // a fresh league in the player slot (active mode is already "player" — see enterMode)
+    S.resetToStarter(); // active mode is already "player" — see enterMode
+    var SD = window.PHLStartupDraft;
+    if (SD) {
+      SD.startDraft();
+      SD.autoDraftRemaining();
+    }
     var html = backLinkHtml();
     html += '<div id="mc-flow-root"></div>';
     root.innerHTML = html;
@@ -148,7 +154,7 @@
     var flowRoot = root.querySelector("#mc-flow-root");
     window.PHLCareerMode.renderCareerCreationFlow(flowRoot, function () {
       window.location.href = "index.html";
-    });
+    }, { fresh: true });
   }
 
   // ---------------- GM Franchise wizard (unchanged from before Be A Player

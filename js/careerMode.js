@@ -7,8 +7,9 @@
  * Be A Player mode deliberately never sets data.franchise.teamId, which is
  * what keeps js/aiManager.js treating your team as fully AI-managed). This
  * module is the home for everything that IS yours to experience:
- *   - Entering the league via a lightweight "amateur draft" placement
- *     (createPlayerAndEnterDraft) when a career starts or restarts.
+ *   - Entering the league: tryout invitations, tryouts, and a real
+ *     pick-by-pick amateur draft (renderCareerCreationFlow) whenever a
+ *     career starts or restarts.
  *   - A pre-game "gameplan" choice that nudges your own performance in
  *     your team's next game(s) this week (see js/sim.js forcePlayerId /
  *     attributeBoost, threaded through by js/schedule.js, js/playoffs.js,
@@ -134,11 +135,10 @@
   // ---------------- Tryouts (pre-draft) ------------------------------------
   // Each approach rolls an "impression score" on roughly the same 0-99 scale
   // as Overall, centered on your true Overall but with a risk/reward spread
-  // that varies by approach — feeds the draft stock used to decide both how
-  // early you're picked (see pickIndexFromStock) and a small one-time
-  // Overall bump/penalty before Potential is even rolled (see
-  // beginDraftDay), so a strong tryout tangibly pays off and a poor one has
-  // a real (small) cost, without ever needing to touch a real player record.
+  // that varies by approach. The average feeds your draft stock (how highly
+  // every team values you on draft day) and a small one-time Overall
+  // bump/penalty; each team's OWN grade additionally makes that specific
+  // team more (or less) eager to draft you (see GRADE_TEAM_BONUS).
   var TRYOUT_APPROACHES = [
     {
       key: "safe",
@@ -150,7 +150,7 @@
       key: "bold",
       label: "Show Off",
       desc: "Take risks to stand out — could dazzle scouts, could backfire.",
-      roll: function (overall) { return U.clamp(overall + U.randInt(-18, 22), 10, 99); },
+      roll: function (overall) { return U.clamp(overall + U.randInt(-16, 20), 10, 99); },
     },
     {
       key: "technical",
@@ -160,24 +160,63 @@
     },
   ];
 
+  var INVITE_COUNT = 5;
+  var MAX_TRYOUTS = 3;
+  var DRAFT_ROUNDS = 2;
+
   function tryoutGrade(diff) {
-    if (diff >= 15) return "Elite";
-    if (diff >= 6) return "Great";
+    if (diff >= 12) return "Elite";
+    if (diff >= 5) return "Great";
     if (diff >= -2) return "Good";
-    if (diff >= -10) return "Average";
+    if (diff >= -8) return "Average";
     return "Poor";
   }
+  var GRADE_TEAM_BONUS = { Elite: 9, Great: 5, Good: 2, Average: 0, Poor: -5 };
+  var GRADE_PILL = { Elite: "pill-mvp", Great: "pill-clinch", Good: "pill-accent", Average: "pill-warn", Poor: "pill-loss" };
+  var SCOUT_QUOTES = {
+    Elite: [
+      "Scouts were buzzing — you were the best player on the ice all session.",
+      "Their GM pulled you aside afterward to ask about your plans for draft day.",
+    ],
+    Great: [
+      "You clearly stood out — a couple of scouts were scribbling notes all session.",
+      "The coaches liked what they saw. You're firmly on their board now.",
+    ],
+    Good: [
+      "A solid, professional showing. You did your job.",
+      "Nothing flashy, but you gave them no reason to worry either.",
+    ],
+    Average: [
+      "You blended in with the pack — hard to remember afterward.",
+      "A few good shifts, a few forgettable ones.",
+    ],
+    Poor: [
+      "Rough day. A couple of turnovers stuck with the scouts.",
+      "Nerves got the better of you — they'll need convincing.",
+    ],
+  };
+  function scoutQuote(grade) {
+    var list = SCOUT_QUOTES[grade] || SCOUT_QUOTES.Good;
+    return list[U.randInt(0, list.length - 1)];
+  }
 
-  // Weighted toward whichever Prospect-division team is thinnest at your
-  // position (and, as a tiebreak, smallest roster overall), with a random
-  // jitter so it doubles as this player's "draft order" — a plausible
-  // pick-by-pick sequence without needing a real draft board. Falls back to
-  // any team at all if Prospect somehow has none (a heavily customized
-  // league).
-  function buildDraftOrder(position) {
+  function prospectTeams() {
     var teams = S.getTeams("prospect");
-    if (!teams.length) teams = S.getTeams();
-    var scored = teams.map(function (t) {
+    return teams.length ? teams : S.getTeams();
+  }
+  function shuffled(list) {
+    var a = list.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  // Used only by the instant, no-ceremony createPlayerAndEnterDraft path:
+  // weighted toward whichever Prospect team is thinnest at your position.
+  function buildDraftOrder(position) {
+    var scored = prospectTeams().map(function (t) {
       var roster = S.getRoster(t.id);
       var atPos = roster.filter(function (p) { return p.position === position; }).length;
       var need = 1 / (1 + atPos) + (1 / (1 + roster.length)) * 0.3;
@@ -187,12 +226,119 @@
     return scored.map(function (s) { return s.t; });
   }
 
-  // Better tryouts (higher average impression score) -> an earlier pick.
-  function pickIndexFromStock(stock, teamCount) {
-    if (!teamCount) return 0;
-    var normalized = U.clamp(stock, 0, 99) / 99;
-    var idx = Math.round((1 - normalized) * (teamCount - 1));
-    return U.clamp(idx, 0, teamCount - 1);
+  // The rest of this year's amateur class — real, named rookies. The ones
+  // that actually get drafted are written into the league as real players
+  // on the teams that picked them (see finalizeCareerCreation); undrafted
+  // ones are simply never created.
+  function generateDraftClass(count) {
+    var list = [];
+    for (var i = 0; i < count; i++) {
+      var roll = Math.random();
+      var position = roll < 0.45 ? "F" : roll < 0.8 ? "D" : "G";
+      var overall = U.randInt(42, 66);
+      var potential = U.rollPotential(overall);
+      list.push({
+        isUser: false,
+        name: U.randomGamertag(),
+        position: position,
+        archetype: U.randomArchetype(position),
+        overall: overall,
+        potential: potential,
+        // How the league's scouts collectively rate this prospect — true
+        // ability plus noise, with a little credit for upside.
+        value: overall + U.randInt(-6, 6) + (potential - 90) * 0.25,
+      });
+    }
+    return list;
+  }
+
+  // Simulates the whole two-round Prospect-division amateur draft up front
+  // (nothing is written to the save until finalizeCareerCreation), so the
+  // draft-day screen can then reveal it pick by pick. Each team takes the
+  // best prospect it can fit (roster max, goalie max), with a small bump
+  // for positions it's thin at — and, for YOU specifically, a bump or
+  // penalty from how your tryout with that team went.
+  function buildDraftBoard(flow) {
+    var order = shuffled(prospectTeams());
+    var rosterMax = (S.getSettings() && S.getSettings().rosterMax) || 10;
+    var goalieMax = S.GOALIE_MAX || 3;
+    var counts = {};
+    order.forEach(function (t) {
+      var roster = S.getRoster(t.id);
+      counts[t.id] = {
+        total: roster.length,
+        G: roster.filter(function (p) { return p.position === "G"; }).length,
+        F: roster.filter(function (p) { return p.position === "F"; }).length,
+        D: roster.filter(function (p) { return p.position === "D"; }).length,
+      };
+    });
+    var teamBonus = {};
+    flow.impressions.forEach(function (imp) { teamBonus[imp.teamId] = GRADE_TEAM_BONUS[imp.grade] || 0; });
+
+    var userEntry = {
+      isUser: true,
+      name: flow.displayName,
+      position: flow.form.position,
+      archetype: flow.form.archetype,
+      overall: flow.overall,
+      potential: flow.potential,
+      value: flow.draftStock,
+    };
+    var pool = generateDraftClass(order.length * DRAFT_ROUNDS + 6).concat([userEntry]);
+
+    var board = [];
+    var pickNo = 0;
+    for (var round = 1; round <= DRAFT_ROUNDS; round++) {
+      order.forEach(function (team) {
+        pickNo += 1;
+        var c = counts[team.id];
+        var best = null;
+        var bestScore = -Infinity;
+        if (c.total < rosterMax) {
+          pool.forEach(function (cand) {
+            if (cand.taken) return;
+            if (cand.position === "G" && c.G >= goalieMax) return;
+            var score = cand.value + ((c[cand.position] || 0) < 2 ? 3 : 0);
+            if (cand.isUser) score += teamBonus[team.id] || 0;
+            if (score > bestScore) { bestScore = score; best = cand; }
+          });
+        }
+        if (best) {
+          best.taken = true;
+          c.total += 1;
+          c[best.position] = (c[best.position] || 0) + 1;
+        }
+        board.push({ round: round, pickNo: pickNo, teamId: team.id, entry: best });
+      });
+    }
+
+    var userPickIndex = -1;
+    board.forEach(function (b, i) { if (b.entry && b.entry.isUser) userPickIndex = i; });
+    var undraftedTeamId = null;
+    if (userPickIndex === -1) {
+      // Went undrafted — first team with room signs you as an undrafted
+      // free agent, so a career still always starts on a roster if at all
+      // possible.
+      var signer = shuffled(order).filter(function (t) {
+        var c = counts[t.id];
+        return c.total < rosterMax && !(flow.form.position === "G" && c.G >= goalieMax);
+      })[0];
+      undraftedTeamId = signer ? signer.id : null;
+    }
+    return { board: board, userPickIndex: userPickIndex, undraftedTeamId: undraftedTeamId };
+  }
+
+  function teamName(teamId) {
+    var t = teamId ? S.getTeam(teamId) : null;
+    return t ? t.name : "a team";
+  }
+  function userTeamIdFromFlow(flow) {
+    if (flow.userPickIndex >= 0) return flow.board[flow.userPickIndex].teamId;
+    return flow.undraftedTeamId;
+  }
+  function ordinalRoundPick(b, teamsPerRound) {
+    var inRound = ((b.pickNo - 1) % teamsPerRound) + 1;
+    return "Round " + b.round + ", pick " + inRound + " (#" + b.pickNo + " overall)";
   }
 
   function gameplanDef(key) {
@@ -235,25 +381,26 @@
     return opts;
   }
 
-  // ---------------- Entering the league (amateur draft placement) --------
-  // Deliberately NOT a full pick-by-pick draft board of the REAL player pool
-  // — that machinery (js/startupDraft.js) exists to distribute that pool
-  // across every team once per save, a very different job. Placement here
-  // mirrors js/stats.js's breakout-rookie tiers instead (most prospects are
-  // raw; a real difference-maker on day one is rare), just scoped to a
-  // single player: rollPotential, generateRookieAge, deriveAttributes, and
-  // the same 70%-of-asking-price entry contract the real Startup Draft uses
-  // are all reused as-is. The tryouts + draft-day ceremony below (see
-  // renderCareerCreationFlow) decides the actual Overall/team; this function
-  // is a simpler, instant fallback path used only for programmatic/direct
-  // creation (no UI ceremony) — kept because it's a reasonable public API in
-  // its own right, not because anything here still calls it for the normal
-  // "create a player" flow.
+  // ---------------- Entering the league -----------------------------------
+  // The normal path is the full creation flow further down
+  // (renderCareerCreationFlow: invitations -> tryouts -> scouting report ->
+  // a real two-round amateur draft revealed pick by pick).
+  // createPlayerAndEnterDraft is only an instant, no-ceremony fallback kept
+  // as a programmatic API — nothing in the UI calls it.
+  // A new career ALWAYS starts as a low, unpolished Prospect-level player —
+  // never above MAX_START_OVERALL, even after a great tryout bump (see
+  // beginDraftDay). Potential is still rolled normally afterward, so the
+  // climb from here is the whole point of a career.
+  var MIN_START_OVERALL = 40;
+  var MAX_START_OVERALL = 70;
   function rollStartingOverall() {
     var roll = Math.random();
-    if (roll < 0.05) return U.randInt(78, 86); // rare, can't-miss prospect
-    if (roll < 0.25) return U.randInt(65, 78); // solid prospect
-    return U.randInt(48, 64); // typical raw prospect — most common outcome
+    if (roll < 0.1) return U.randInt(61, 66); // polished for a prospect — the rare ceiling
+    if (roll < 0.4) return U.randInt(55, 60); // solid raw prospect
+    return U.randInt(45, 54); // typical raw prospect — most common outcome
+  }
+  function clampStartOverall(ovr) {
+    return U.clamp(Math.round(ovr), MIN_START_OVERALL, MAX_START_OVERALL);
   }
 
   function createPlayerAndEnterDraft(opts) {
@@ -261,7 +408,7 @@
     var position = opts.position === "D" || opts.position === "G" ? opts.position : "F";
     var archetype = opts.archetype && archetypeExists(position, opts.archetype) ? opts.archetype : U.randomArchetype(position);
     var name = (opts.name || "").trim() || U.randomGamertag();
-    var overall = rollStartingOverall();
+    var overall = clampStartOverall(rollStartingOverall());
     var potential = U.rollPotential(overall);
     var order = buildDraftOrder(position);
     var team = order.length ? order[0] : null;
@@ -301,43 +448,60 @@
     d.myPlayer.trainingFocus = null;
     d.myPlayer.milestonesHit = [];
     S.save();
-    if (window.PHLInbox) {
-      window.PHLInbox.addNotification({
-        type: "career",
-        title: "Welcome to the PHL",
-        body: spec.team
-          ? spec.team.name + " selected you in the amateur draft — welcome to the PHL!"
-          : "You've entered the league as a " + spec.position + " — no team was available to place you on yet.",
-      });
-    }
+    S.addNotification({
+      type: "career",
+      title: "Welcome to the PHL",
+      body: spec.draftNote || (spec.team
+        ? spec.team.name + " selected you in the amateur draft — welcome to the PHL!"
+        : "You've entered the league as a " + spec.position + " — no team was available to place you on yet."),
+    });
     return created;
   }
 
-  // ---------------- Career creation flow (tryouts -> draft day) -----------
-  // A small multi-step wizard shared by js/createSave.js (a save's very
-  // first career) and My Career's own "no player yet" / send-off screens
-  // (every career after a retirement). `el` is mounted fresh each step
-  // (its innerHTML is fully owned by this flow); `onComplete(createdPlayer)`
-  // fires once the player is actually created. Resumable: calling this
-  // again with the flow already in progress just re-renders wherever it
-  // left off (e.g. after switching tabs and back), it does not restart.
-  function renderCareerCreationFlow(el, onComplete) {
+  // ---------------- Career creation flow ----------------------------------
+  // Create -> Tryout Invitations -> Tryouts -> Draft Day -> finalize.
+  // Shared by js/createSave.js (a save's very first career — which runs the
+  // league's headless Startup Draft FIRST so every team has a real roster
+  // before you try out) and My Career's own "no player yet" / send-off
+  // screens (every career after a retirement). Nothing is written to the
+  // save until the very last "Enter the League" click. `onComplete(created)`
+  // fires once the player actually exists. Resumable: calling this again
+  // mid-flow re-renders wherever it left off unless opts.fresh is set.
+  var FLOW_STEPS = [
+    { key: "form", label: "Create" },
+    { key: "invites", label: "Invitations" },
+    { key: "tryout", label: "Tryouts" },
+    { key: "summary", label: "Scouting Report" },
+    { key: "draft", label: "Draft Day" },
+  ];
+
+  function renderCareerCreationFlow(el, onComplete, opts) {
     flowContainer = el;
     onCareerCreated = onComplete;
+    if (opts && opts.fresh) {
+      stopDraftAutoPlay();
+      creationFlow = null;
+    }
     if (!creationFlow) {
       creationFlow = {
         step: "form",
         form: { name: "", position: "F", archetype: "" },
+        displayName: "",
+        baseOverall: null,
         overall: null,
         potential: null,
         draftStock: null,
-        tryoutTeams: [],
+        invites: [],
+        selectedInvites: [],
+        tryoutTeamIds: [],
         tryoutIndex: 0,
+        lastResult: null,
         impressions: [],
-        draftOrder: [],
-        pickIndex: 0,
-        team: null,
+        board: [],
+        userPickIndex: -1,
+        undraftedTeamId: null,
         revealIndex: 0,
+        autoTimer: null,
       };
     }
     renderFlowStep();
@@ -345,22 +509,52 @@
 
   function renderFlowStep() {
     if (!flowContainer || !creationFlow) return;
-    if (creationFlow.step === "tryouts") renderFlowTryoutStep();
-    else if (creationFlow.step === "draft") renderFlowDraftStep();
+    var step = creationFlow.step;
+    if (step === "invites") renderFlowInviteStep();
+    else if (step === "tryout") renderFlowTryoutStep();
+    else if (step === "summary") renderFlowSummaryStep();
+    else if (step === "draft") renderFlowDraftStep();
     else renderFlowFormStep();
   }
 
+  function flowStepperHtml() {
+    var cur = creationFlow.step;
+    var html = '<div class="chip-row career-stepper">';
+    var reached = true;
+    FLOW_STEPS.forEach(function (s, i) {
+      var active = s.key === cur;
+      html += '<span class="chip' + (active ? " chip-active" : "") + '"' + (reached || active ? "" : ' style="opacity:0.45"') + ">" + (i + 1) + ". " + s.label + "</span>";
+      if (active) reached = false;
+    });
+    html += "</div>";
+    return html;
+  }
+
+  function playerCardHtml() {
+    var f = creationFlow.form;
+    var html = '<p class="muted small"><strong>' + U.escapeHtml(creationFlow.displayName) + "</strong> &middot; " +
+      U.escapeHtml(f.position) + " &middot; " + U.escapeHtml(f.archetype || "") + " &middot; " +
+      '<span class="pill pill-accent">' + creationFlow.overall + " OVR</span>";
+    if (creationFlow.potential != null) html += ' <span class="pill">' + creationFlow.potential + " POT</span>";
+    html += "</p>";
+    return html;
+  }
+
+  // ---- Step 1: create ----
   function renderFlowFormStep() {
     var f = creationFlow.form;
     if (!f.archetype || !archetypeExists(f.position, f.archetype)) f.archetype = U.randomArchetype(f.position);
-    var html = '<div class="form-card"><h3>Create Your Player</h3>';
-    html += '<p class="muted small">You\'ll try out for a few Prospect-division teams, then find out where the amateur draft sends you.</p>';
+    var html = flowStepperHtml();
+    html += '<div class="form-card"><h3>Create Your Player</h3>';
+    html += '<p class="muted small">Every career starts at the bottom: you\'re an unpolished amateur prospect (somewhere around ' +
+      MIN_START_OVERALL + "&ndash;66 OVR, never above " + MAX_START_OVERALL + "). A few Prospect-division teams will invite you to try out, " +
+      "then you'll watch the amateur draft unfold pick by pick to see where you land.</p>";
     html += '<div class="form-grid">';
     html += '<label>Name<input type="text" id="cf-name" value="' + U.escapeHtml(f.name) + '" placeholder="Leave blank for a random gamertag"></label>';
     html += '<label>Position<select id="cf-position">' + positionOptions(f.position) + "</select></label>";
     html += '<label>Archetype<select id="cf-archetype">' + archetypeOptions(f.position, f.archetype) + "</select></label>";
     html += "</div>";
-    html += '<div class="form-actions"><button class="btn btn-primary" data-action="begin-tryouts">Begin Tryouts &raquo;</button></div>';
+    html += '<div class="form-actions"><button class="btn btn-primary" data-action="begin-invites">Scout Me &raquo;</button></div>';
     html += "</div>";
     flowContainer.innerHTML = html;
     var nameInput = flowContainer.querySelector("#cf-name");
@@ -373,36 +567,96 @@
     });
     var archSel = flowContainer.querySelector("#cf-archetype");
     if (archSel) archSel.addEventListener("change", function (e) { f.archetype = e.target.value; });
-    var beginBtn = flowContainer.querySelector('[data-action="begin-tryouts"]');
-    if (beginBtn) beginBtn.addEventListener("click", beginTryouts);
+    flowContainer.querySelector('[data-action="begin-invites"]').addEventListener("click", beginInvites);
   }
 
-  function beginTryouts() {
+  function beginInvites() {
     var f = creationFlow.form;
-    creationFlow.overall = rollStartingOverall();
-    var teams = S.getTeams("prospect");
-    if (!teams.length) teams = S.getTeams();
-    var shuffled = teams.slice().sort(function () { return Math.random() - 0.5; });
-    creationFlow.tryoutTeams = shuffled.slice(0, Math.min(3, shuffled.length));
-    creationFlow.tryoutIndex = 0;
-    creationFlow.impressions = [];
-    creationFlow.step = "tryouts";
+    creationFlow.displayName = (f.name || "").trim() || U.randomGamertag();
+    f.name = creationFlow.displayName;
+    creationFlow.baseOverall = clampStartOverall(rollStartingOverall());
+    creationFlow.overall = creationFlow.baseOverall;
+    creationFlow.potential = null;
+    creationFlow.invites = shuffled(prospectTeams()).slice(0, INVITE_COUNT).map(function (t) { return t.id; });
+    creationFlow.selectedInvites = [];
+    creationFlow.step = "invites";
     renderFlowStep();
   }
 
+  // ---- Step 2: pick which invitations to accept ----
+  function renderFlowInviteStep() {
+    var sel = creationFlow.selectedInvites;
+    var pos = creationFlow.form.position;
+    var html = flowStepperHtml();
+    html += '<div class="form-card"><h3>Tryout Invitations</h3>';
+    html += playerCardHtml();
+    html += '<p class="muted small">' + creationFlow.invites.length + " Prospect-division teams want a look at you. You only have time for " +
+      MAX_TRYOUTS + " &mdash; pick which ones. A great tryout makes that team much more likely to draft you; a bad one can scare them off.</p>";
+    html += '<table class="data-table compact"><thead><tr><th>Team</th><th>Roster</th><th>At ' + U.escapeHtml(pos) + '</th><th></th></tr></thead><tbody>';
+    creationFlow.invites.forEach(function (id) {
+      var t = S.getTeam(id);
+      if (!t) return;
+      var roster = S.getRoster(id);
+      var atPos = roster.filter(function (p) { return p.position === pos; }).length;
+      var on = sel.indexOf(id) !== -1;
+      var disabled = !on && sel.length >= MAX_TRYOUTS;
+      html += "<tr><td>" + U.crestHtml(t, "crest-sm") + U.escapeHtml(t.name) + "</td><td>" + roster.length + "</td><td>" + atPos + "</td>" +
+        '<td><button class="btn btn-sm' + (on ? " btn-primary" : "") + '" data-invite="' + id + '"' + (disabled ? " disabled" : "") + ">" +
+        (on ? "&#10003; Trying Out" : "Accept") + "</button></td></tr>";
+    });
+    html += "</tbody></table>";
+    html += '<div class="form-actions"><span class="muted small">' + sel.length + " / " + MAX_TRYOUTS + " selected</span>" +
+      '<button class="btn btn-primary" data-action="begin-tryouts"' + (sel.length ? "" : " disabled") + ">Start Tryouts &raquo;</button></div>";
+    html += "</div>";
+    flowContainer.innerHTML = html;
+    flowContainer.querySelectorAll("[data-invite]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = b.dataset.invite;
+        var i = sel.indexOf(id);
+        if (i !== -1) sel.splice(i, 1);
+        else if (sel.length < MAX_TRYOUTS) sel.push(id);
+        renderFlowStep();
+      });
+    });
+    flowContainer.querySelector('[data-action="begin-tryouts"]').addEventListener("click", function () {
+      if (!sel.length) return;
+      creationFlow.tryoutTeamIds = sel.slice();
+      creationFlow.tryoutIndex = 0;
+      creationFlow.impressions = [];
+      creationFlow.lastResult = null;
+      creationFlow.step = "tryout";
+      renderFlowStep();
+    });
+  }
+
+  // ---- Step 3: tryouts, one team at a time ----
   function renderFlowTryoutStep() {
+    var ids = creationFlow.tryoutTeamIds;
     var idx = creationFlow.tryoutIndex;
-    if (!creationFlow.tryoutTeams.length || idx >= creationFlow.tryoutTeams.length) {
-      renderFlowTryoutSummary();
+    var html = flowStepperHtml();
+    var res = creationFlow.lastResult;
+    if (res) {
+      var last = idx >= ids.length;
+      html += '<div class="form-card"><h3>Tryout ' + idx + " of " + ids.length + " &mdash; " + U.escapeHtml(res.teamName) + "</h3>";
+      html += '<p>You chose <strong>' + U.escapeHtml(res.approachLabel) + '</strong>. Scouts\' grade: <span class="pill ' + (GRADE_PILL[res.grade] || "") + '">' + res.grade + "</span></p>";
+      html += '<p class="muted">&ldquo;' + U.escapeHtml(res.quote) + "&rdquo;</p>";
+      html += '<div class="form-actions"><button class="btn btn-primary" data-action="next-tryout">' + (last ? "See Scouting Report &raquo;" : "Next Tryout &raquo;") + "</button></div></div>";
+      flowContainer.innerHTML = html;
+      flowContainer.querySelector('[data-action="next-tryout"]').addEventListener("click", function () {
+        creationFlow.lastResult = null;
+        if (creationFlow.tryoutIndex >= creationFlow.tryoutTeamIds.length) beginSummary();
+        else renderFlowStep();
+      });
       return;
     }
-    var team = creationFlow.tryoutTeams[idx];
-    var html = '<div class="form-card"><h3>Tryout ' + (idx + 1) + " of " + creationFlow.tryoutTeams.length + " &mdash; " +
-      U.crestHtml(team, "crest-sm") + U.escapeHtml(team.name) + "</h3>";
-    html += '<p class="muted small">How do you want to approach this tryout?</p>';
-    html += '<div class="chip-row">';
+    if (idx >= ids.length) { beginSummary(); return; }
+    var team = S.getTeam(ids[idx]);
+    html += '<div class="form-card"><h3>Tryout ' + (idx + 1) + " of " + ids.length + " &mdash; " + U.crestHtml(team, "crest-sm") + U.escapeHtml(team ? team.name : "?") + "</h3>";
+    html += playerCardHtml();
+    html += '<p class="muted small">Their coaches and scouts are watching. How do you want to play this session?</p>';
+    html += '<div class="mode-grid">';
     TRYOUT_APPROACHES.forEach(function (a) {
-      html += '<button class="chip" data-approach="' + a.key + '" title="' + U.escapeHtml(a.desc) + '">' + U.escapeHtml(a.label) + "</button>";
+      html += '<button type="button" class="mode-card" data-approach="' + a.key + '"><h3>' + U.escapeHtml(a.label) + "</h3><p>" + U.escapeHtml(a.desc) + "</p></button>";
     });
     html += "</div></div>";
     flowContainer.innerHTML = html;
@@ -413,88 +667,198 @@
 
   function runTryout(team, approachKey) {
     var approach = TRYOUT_APPROACHES.filter(function (a) { return a.key === approachKey; })[0] || TRYOUT_APPROACHES[0];
-    var score = approach.roll(creationFlow.overall);
-    creationFlow.impressions.push({ teamId: team.id, teamName: team.name, approachLabel: approach.label, score: score });
+    var score = approach.roll(creationFlow.baseOverall);
+    var grade = tryoutGrade(score - creationFlow.baseOverall);
+    var result = { teamId: team.id, teamName: team.name, approachLabel: approach.label, score: score, grade: grade, quote: scoutQuote(grade) };
+    creationFlow.impressions.push(result);
+    creationFlow.lastResult = result;
     creationFlow.tryoutIndex += 1;
     renderFlowStep();
   }
 
-  function renderFlowTryoutSummary() {
-    var html = '<div class="form-card"><h3>Tryout Results</h3>';
-    html += '<table class="data-table compact"><thead><tr><th>Team</th><th>Approach</th><th>Grade</th></tr></thead><tbody>';
-    creationFlow.impressions.forEach(function (imp) {
-      var diff = imp.score - creationFlow.overall;
-      html += "<tr><td>" + U.escapeHtml(imp.teamName) + "</td><td>" + U.escapeHtml(imp.approachLabel) + "</td><td>" + tryoutGrade(diff) + "</td></tr>";
-    });
-    html += "</tbody></table>";
-    html += '<div class="form-actions"><button class="btn btn-primary" data-action="continue-to-draft">Continue to Draft Day &raquo;</button></div>';
-    html += "</div>";
-    flowContainer.innerHTML = html;
-    flowContainer.querySelector('[data-action="continue-to-draft"]').addEventListener("click", beginDraftDay);
-  }
-
-  function beginDraftDay() {
-    var avgStock = creationFlow.impressions.length ? U.avg(creationFlow.impressions.map(function (i) { return i.score; })) : creationFlow.overall;
-    var bump = U.clamp(Math.round((avgStock - creationFlow.overall) / 6), -3, 3);
-    var finalOverall = U.clamp(creationFlow.overall + bump, 30, 99);
-    creationFlow.overall = finalOverall;
-    creationFlow.potential = U.rollPotential(finalOverall);
+  // ---- Step 4: scouting report (tryout impact + mock-draft projection) ----
+  function beginSummary() {
+    var imps = creationFlow.impressions;
+    var avgStock = imps.length ? U.avg(imps.map(function (i) { return i.score; })) : creationFlow.baseOverall;
+    var bump = U.clamp(Math.round((avgStock - creationFlow.baseOverall) / 4), -3, 3);
+    creationFlow.overall = clampStartOverall(creationFlow.baseOverall + bump);
+    creationFlow.potential = U.rollPotential(creationFlow.overall);
     creationFlow.draftStock = avgStock;
-    creationFlow.draftOrder = buildDraftOrder(creationFlow.form.position);
-    creationFlow.pickIndex = pickIndexFromStock(avgStock, creationFlow.draftOrder.length);
-    creationFlow.team = creationFlow.draftOrder.length ? creationFlow.draftOrder[creationFlow.pickIndex] : null;
+    var built = buildDraftBoard(creationFlow);
+    creationFlow.board = built.board;
+    creationFlow.userPickIndex = built.userPickIndex;
+    creationFlow.undraftedTeamId = built.undraftedTeamId;
     creationFlow.revealIndex = 0;
-    creationFlow.step = "draft";
+    creationFlow.step = "summary";
     renderFlowStep();
   }
 
-  function renderFlowDraftStep() {
-    var html = '<div class="form-card"><h3>Draft Day</h3>';
-    html += '<p class="muted small">The Prospect-division amateur draft is underway.</p>';
-    if (!creationFlow.draftOrder.length) {
-      html += '<p class="muted">No Prospect-division teams available to draft you — entering as a free agent instead.</p>';
-      html += '<div class="form-actions"><button class="btn btn-primary" data-action="finalize-career">Enter the League &raquo;</button></div></div>';
-      flowContainer.innerHTML = html;
-      flowContainer.querySelector('[data-action="finalize-career"]').addEventListener("click", finalizeCareerCreation);
-      return;
-    }
-    html += '<div class="draft-pool-scroll"><table class="data-table compact"><thead><tr><th>Pick</th><th>Team</th><th>Selection</th></tr></thead><tbody>';
-    for (var i = 0; i <= creationFlow.revealIndex && i < creationFlow.draftOrder.length; i++) {
-      var t = creationFlow.draftOrder[i];
-      var mine = i === creationFlow.pickIndex;
-      html += "<tr" + (mine ? ' class="draft-pool-top-pick"' : "") + "><td>" + (i + 1) + "</td><td>" + U.crestHtml(t, "crest-sm") + U.escapeHtml(t.name) + "</td><td>" +
-        (mine ? "<strong>YOU — " + U.escapeHtml((creationFlow.form.name || "").trim() || "your player") + "!</strong>" : "selects a prospect") + "</td></tr>";
-    }
-    html += "</tbody></table></div>";
-    if (creationFlow.revealIndex < creationFlow.pickIndex) {
-      html += '<div class="form-actions">';
-      html += '<button class="btn btn-primary" data-action="reveal-next-pick">Reveal Next Pick</button>';
-      html += '<button class="btn" data-action="skip-to-my-pick">Skip to My Pick</button>';
-      html += "</div>";
+  function renderFlowSummaryStep() {
+    var f = creationFlow;
+    var html = flowStepperHtml();
+    html += '<div class="form-card"><h3>Scouting Report</h3>';
+    html += '<table class="data-table compact"><thead><tr><th>Team</th><th>Approach</th><th>Grade</th></tr></thead><tbody>';
+    f.impressions.forEach(function (imp) {
+      html += "<tr><td>" + U.escapeHtml(imp.teamName) + "</td><td>" + U.escapeHtml(imp.approachLabel) + '</td><td><span class="pill ' + (GRADE_PILL[imp.grade] || "") + '">' + imp.grade + "</span></td></tr>";
+    });
+    html += "</tbody></table>";
+    var delta = f.overall - f.baseOverall;
+    html += "<p>Rating after tryouts: <strong>" + f.overall + " OVR</strong> " +
+      (delta ? '<span class="pill ' + (delta > 0 ? "pill-clinch" : "pill-loss") + '">' + (delta > 0 ? "+" : "") + delta + "</span>" : '<span class="muted small">(unchanged)</span>') +
+      " &middot; Potential: <strong>" + f.potential + "</strong></p>";
+    var teamsPerRound = f.board.length / DRAFT_ROUNDS;
+    var projection;
+    if (f.userPickIndex === -1) {
+      projection = "Mock drafts have you on the bubble &mdash; you might not hear your name called at all.";
     } else {
-      html += '<p class="pill pill-mvp">&#127942; ' + U.escapeHtml(creationFlow.team ? creationFlow.team.name : "A team") + " selects you!</p>";
-      html += '<div class="form-actions"><button class="btn btn-primary" data-action="finalize-career">Enter the League &raquo;</button></div>';
+      var truePick = f.board[f.userPickIndex].pickNo;
+      var lo = Math.max(1, truePick - U.randInt(1, 3));
+      var hi = Math.min(f.board.length, truePick + U.randInt(1, 3));
+      var loRound = Math.ceil(lo / teamsPerRound), hiRound = Math.ceil(hi / teamsPerRound);
+      projection = "Mock drafts project you somewhere around pick #" + lo + "&ndash;#" + hi +
+        " (Round " + loRound + (hiRound !== loRound ? "&ndash;" + hiRound : "") + ").";
     }
+    html += '<p class="muted">' + projection + "</p>";
+    html += '<div class="form-actions"><button class="btn btn-primary" data-action="continue-to-draft">Go to Draft Day &raquo;</button></div>';
     html += "</div>";
     flowContainer.innerHTML = html;
-    var nextBtn = flowContainer.querySelector('[data-action="reveal-next-pick"]');
-    if (nextBtn) nextBtn.addEventListener("click", function () { creationFlow.revealIndex += 1; renderFlowStep(); });
-    var skipBtn = flowContainer.querySelector('[data-action="skip-to-my-pick"]');
-    if (skipBtn) skipBtn.addEventListener("click", function () { creationFlow.revealIndex = creationFlow.pickIndex; renderFlowStep(); });
-    var finalizeBtn = flowContainer.querySelector('[data-action="finalize-career"]');
-    if (finalizeBtn) finalizeBtn.addEventListener("click", finalizeCareerCreation);
+    flowContainer.querySelector('[data-action="continue-to-draft"]').addEventListener("click", function () {
+      creationFlow.step = "draft";
+      creationFlow.revealIndex = 0;
+      renderFlowStep();
+    });
+  }
+
+  // ---- Step 5: draft day, revealed pick by pick ----
+  function stopDraftAutoPlay() {
+    if (creationFlow && creationFlow.autoTimer) {
+      clearTimeout(creationFlow.autoTimer);
+      creationFlow.autoTimer = null;
+    }
+  }
+  function draftAutoTick() {
+    var f = creationFlow;
+    if (!f || f.step !== "draft" || !flowContainer || !document.body.contains(flowContainer)) { if (f) f.autoTimer = null; return; }
+    f.revealIndex = Math.min(f.board.length, f.revealIndex + 1);
+    var justPickedMe = f.userPickIndex !== -1 && f.revealIndex === f.userPickIndex + 1;
+    var done = f.revealIndex >= f.board.length;
+    f.autoTimer = null;
+    if (!justPickedMe && !done) f.autoTimer = setTimeout(draftAutoTick, 650);
+    renderFlowDraftStep();
+  }
+
+  function renderFlowDraftStep() {
+    var f = creationFlow;
+    var teamsPerRound = f.board.length / DRAFT_ROUNDS;
+    var myTeamId = userTeamIdFromFlow(f);
+    var meRevealed = f.userPickIndex !== -1 && f.revealIndex > f.userPickIndex;
+    var allRevealed = f.revealIndex >= f.board.length;
+    var html = flowStepperHtml();
+    html += '<div class="form-card"><h3>Amateur Draft &mdash; Prospect Division</h3>';
+    html += playerCardHtml();
+    if (!allRevealed) {
+      var next = f.board[f.revealIndex];
+      html += '<p>On the clock: ' + U.crestHtml(S.getTeam(next.teamId), "crest-sm") + "<strong>" + U.escapeHtml(teamName(next.teamId)) + "</strong> &middot; " +
+        '<span class="muted small">' + ordinalRoundPick(next, teamsPerRound) + "</span></p>";
+    }
+    if (meRevealed) {
+      var mine = f.board[f.userPickIndex];
+      html += '<p class="pill pill-mvp">&#127942; With ' + ordinalRoundPick(mine, teamsPerRound).replace(/^Round/, "round") + ", the " +
+        U.escapeHtml(teamName(mine.teamId)) + " select " + U.escapeHtml(f.displayName) + "!</p>";
+    } else if (allRevealed && f.userPickIndex === -1) {
+      html += '<p class="pill pill-warn">Your name was never called. ' +
+        (myTeamId ? "But the " + U.escapeHtml(teamName(myTeamId)) + " sign you as an undrafted free agent!" : "You'll start as a free agent.") + "</p>";
+    }
+    html += '<div class="draft-pool-scroll" id="cf-draft-board"><table class="data-table compact"><thead><tr><th>#</th><th>Rd</th><th>Team</th><th>Selection</th><th>Pos</th><th>OVR</th></tr></thead><tbody>';
+    for (var i = 0; i < f.revealIndex && i < f.board.length; i++) {
+      var b = f.board[i];
+      var e = b.entry;
+      var isMe = e && e.isUser;
+      html += "<tr" + (isMe ? ' class="draft-pool-top-pick"' : "") + "><td>" + b.pickNo + "</td><td>" + b.round + "</td><td>" + U.crestHtml(S.getTeam(b.teamId), "crest-sm") + U.escapeHtml(teamName(b.teamId)) + "</td>" +
+        (e
+          ? "<td>" + (isMe ? "<strong>YOU &mdash; " + U.escapeHtml(e.name) + "</strong>" : U.escapeHtml(e.name)) + "</td><td>" + e.position + "</td><td>" + e.overall + "</td>"
+          : '<td class="muted">passes (roster full)</td><td></td><td></td>') +
+        "</tr>";
+    }
+    if (!f.revealIndex) html += '<tr><td colspan="6" class="muted">The commissioner steps to the podium&hellip;</td></tr>';
+    html += "</tbody></table></div>";
+
+    html += '<div class="form-actions">';
+    if (!allRevealed) {
+      html += '<button class="btn btn-primary" data-action="reveal-next-pick">Next Pick</button>';
+      html += '<button class="btn" data-action="auto-draft">' + (f.autoTimer ? "&#10074;&#10074; Pause" : "&#9654; Watch It Play Out") + "</button>";
+      if (!meRevealed && f.userPickIndex !== -1) html += '<button class="btn" data-action="skip-to-my-pick">Skip to My Pick</button>';
+      else html += '<button class="btn" data-action="finish-draft">Finish Draft</button>';
+    } else {
+      html += '<button class="btn btn-primary" data-action="finalize-career">Enter the League &raquo;</button>';
+    }
+    html += "</div></div>";
+    flowContainer.innerHTML = html;
+
+    var boardEl = flowContainer.querySelector("#cf-draft-board");
+    if (boardEl) boardEl.scrollTop = boardEl.scrollHeight;
+    function bind(action, fn) {
+      var btn = flowContainer.querySelector('[data-action="' + action + '"]');
+      if (btn) btn.addEventListener("click", fn);
+    }
+    bind("reveal-next-pick", function () { stopDraftAutoPlay(); f.revealIndex = Math.min(f.board.length, f.revealIndex + 1); renderFlowStep(); });
+    bind("auto-draft", function () {
+      if (f.autoTimer) { stopDraftAutoPlay(); renderFlowStep(); return; }
+      f.autoTimer = setTimeout(draftAutoTick, 350);
+      renderFlowStep();
+    });
+    bind("skip-to-my-pick", function () { stopDraftAutoPlay(); f.revealIndex = f.userPickIndex + 1; renderFlowStep(); });
+    bind("finish-draft", function () { stopDraftAutoPlay(); f.revealIndex = f.board.length; renderFlowStep(); });
+    bind("finalize-career", finalizeCareerCreation);
   }
 
   function finalizeCareerCreation() {
-    var f = creationFlow.form;
-    var name = (f.name || "").trim() || U.randomGamertag();
+    var f = creationFlow;
+    if (!f) return;
+    stopDraftAutoPlay();
+    var season = S.getSeasonNumber ? S.getSeasonNumber() : 1;
+    // Everyone else drafted becomes a real player on the team that took
+    // them — the class you were drafted alongside actually exists.
+    f.board.forEach(function (b) {
+      var e = b.entry;
+      if (!e || e.isUser) return;
+      var age = U.generateRookieAge();
+      S.addPlayer({
+        name: e.name,
+        position: e.position,
+        archetype: e.archetype,
+        overall: e.overall,
+        potential: e.potential,
+        attributes: U.deriveAttributes(e.overall, e.position, e.archetype),
+        salary: Math.max(U.SALARY_MIN, Math.round((U.salaryAsking(e.overall, e.potential) * 0.5) / 500) * 500),
+        contractYears: 2,
+        teamId: b.teamId,
+        isDraftProspect: false,
+        eligibleDivisions: ["prospect"],
+        isRookieClass: true,
+        rookieSeason: season,
+        age: age,
+        retirementAge: U.retirementAgeFor(age),
+        stats: S.freshStatLine(),
+        careerStats: S.freshStatLine(),
+      });
+    });
+    var teamsPerRound = f.board.length / DRAFT_ROUNDS;
+    var myTeamId = userTeamIdFromFlow(f);
+    var team = myTeamId ? S.getTeam(myTeamId) : null;
+    var draftNote = f.userPickIndex !== -1
+      ? team.name + " drafted you in the amateur draft — " + ordinalRoundPick(f.board[f.userPickIndex], teamsPerRound) + ". Welcome to the PHL!"
+      : team
+        ? "You went undrafted, but " + team.name + " signed you as an undrafted free agent. Welcome to the PHL — time to prove everyone wrong."
+        : "You went undrafted and start your career as a free agent.";
     var created = finalizePlayerRecord({
-      name: name,
-      position: f.position,
-      archetype: f.archetype,
-      overall: creationFlow.overall,
-      potential: creationFlow.potential,
-      team: creationFlow.team,
+      name: f.displayName,
+      position: f.form.position,
+      archetype: f.form.archetype,
+      overall: f.overall,
+      potential: f.potential,
+      team: team,
+      draftNote: draftNote,
     });
     creationFlow = null;
     var cb = onCareerCreated;

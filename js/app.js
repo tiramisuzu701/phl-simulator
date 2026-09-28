@@ -310,15 +310,18 @@
       window.location.href = "create-save.html";
       return;
     }
+    // The Startup Draft normally already ran on create-save.html (before
+    // tryouts, so rosters were real) — this is just a safety net for older
+    // saves. The schedule is generated here either way.
     var sd = S.getStartupDraft();
     if (!sd || sd.status !== "complete") {
       if (sd && sd.status === "not_started" && window.PHLStartupDraft) {
         window.PHLStartupDraft.startDraft();
       }
       if (window.PHLStartupDraft) window.PHLStartupDraft.autoDraftRemaining();
-      if (window.PHLSchedule && !(S.getSchedule() || []).length) {
-        window.PHLSchedule.generateSeasonSchedule();
-      }
+    }
+    if (window.PHLSchedule && !(S.getSchedule() || []).length) {
+      window.PHLSchedule.generateSeasonSchedule();
     }
     showTab("mycareer");
   }
