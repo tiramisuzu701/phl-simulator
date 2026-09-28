@@ -286,6 +286,15 @@
     };
     var pool = generateDraftClass(order.length * DRAFT_ROUNDS + 6).concat([userEntry]);
 
+    function roomLeftForUserAfter(pickingTeamId, cand) {
+      return order.some(function (t) {
+        var c = counts[t.id];
+        var total = c.total + (t.id === pickingTeamId ? 1 : 0);
+        var goalies = c.G + (t.id === pickingTeamId && cand.position === "G" ? 1 : 0);
+        return total < rosterMax && !(userEntry.position === "G" && goalies >= goalieMax);
+      });
+    }
+
     var board = [];
     var pickNo = 0;
     for (var round = 1; round <= DRAFT_ROUNDS; round++) {
@@ -298,6 +307,10 @@
           pool.forEach(function (cand) {
             if (cand.taken) return;
             if (cand.position === "G" && c.G >= goalieMax) return;
+            // While you're still on the board, an AI rookie can only be taken
+            // if that still leaves at least one roster somewhere with room
+            // for you — so even if you go undrafted, a team can sign you.
+            if (!cand.isUser && !userEntry.taken && !roomLeftForUserAfter(team.id, cand)) return;
             var score = cand.value + ((c[cand.position] || 0) < 2 ? 3 : 0);
             if (cand.isUser) score += teamBonus[team.id] || 0;
             if (score > bestScore) { bestScore = score; best = cand; }
@@ -1083,12 +1096,20 @@
     }
     return "This season: " + s.gp + " GP, " + s.g + " G, " + s.a + " A, " + s.pts + " PTS";
   }
+  // Career totals only fold in at season rollover, so add the season in
+  // progress on top to keep this line live week to week.
   function careerLine(p) {
     var cs = p.careerStats || S.freshStatLine();
+    var cur = p.stats || S.freshStatLine();
     if (p.position === "G") {
-      return "Career: " + cs.gp + " GP, " + ((cs.svPct || 0) * 100).toFixed(1) + "% SV%, " + U.round1(cs.gaa || 0) + " GAA";
+      var sa = (cs.shotsAgainst || 0) + (cur.shotsAgainst || 0);
+      var sv = (cs.saves || 0) + (cur.saves || 0);
+      var ga = (cs.goalsAgainst || 0) + (cur.goalsAgainst || 0);
+      var gp = (cs.gp || 0) + (cur.gp || 0);
+      return "Career: " + gp + " GP, " + (sa ? ((sv / sa) * 100).toFixed(1) : "0.0") + "% SV%, " + U.round1(gp ? ga / gp : 0) + " GAA";
     }
-    return "Career: " + cs.gp + " GP, " + cs.g + " G, " + cs.a + " A, " + cs.pts + " PTS";
+    return "Career: " + ((cs.gp || 0) + (cur.gp || 0)) + " GP, " + ((cs.g || 0) + (cur.g || 0)) + " G, " +
+      ((cs.a || 0) + (cur.a || 0)) + " A, " + ((cs.pts || 0) + (cur.pts || 0)) + " PTS";
   }
 
   function positionOptions(selected) {

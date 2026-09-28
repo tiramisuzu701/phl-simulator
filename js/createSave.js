@@ -153,6 +153,7 @@
     wireBackLink();
     var flowRoot = root.querySelector("#mc-flow-root");
     window.PHLCareerMode.renderCareerCreationFlow(flowRoot, function () {
+      S.flush();
       window.location.href = "index.html";
     }, { fresh: true });
   }
@@ -382,6 +383,7 @@
       S.setFranchise(state.divisionId, newTeam.id);
       S.updateSettings({ startupDraftRounds: 6 });
     }
+    S.flush();
     window.location.href = "index.html";
   }
 

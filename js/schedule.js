@@ -248,7 +248,7 @@
 
     var season = S.getSeason();
     var html = '<div class="panel-header"><h2>Schedule &amp; Results</h2></div>';
-    html += '<p class="muted small">Games now play out automatically week by week — use the <strong>Advance Week</strong> button up top. This tab is for browsing the schedule and box scores.</p>';
+    html += '<p class="muted small">Games now play out automatically week by week — use the <strong>Advance Week</strong> button. This tab is for browsing the schedule and box scores.</p>';
     html += '<div class="tab-strip">';
     divisions.forEach(function (d) {
       html += '<button class="chip' + (view.division === d.id ? " chip-active" : "") + '" data-division="' + d.id + '">' + U.escapeHtml(d.name) + "</button>";

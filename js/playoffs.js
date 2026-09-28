@@ -386,7 +386,7 @@
     if (!bracket) {
       html += '<div class="empty-state">';
       if (!regularDone) {
-        html += "<p>The regular season isn't finished for this division yet — keep hitting Advance Week up top.</p>";
+        html += "<p>The regular season isn't finished for this division yet — keep hitting Advance Week.</p>";
       } else {
         var formatNote = cfg.byes < cfg.teams
           ? "Top " + cfg.byes + " get a bye; seeds " + (cfg.byes + 1) + "–" + cfg.teams + " play a Wild Card round for the last spot(s)."
@@ -403,7 +403,7 @@
       var champ = S.getTeam(bracket.champion);
       html += '<div class="champion-banner">&#127942; ' + (champ ? U.crestHtml(champ, "crest-lg") : "") + '<strong>' + U.escapeHtml(champ ? champ.name : "?") + "</strong> is the " + U.escapeHtml(S.getDivision(div).name) + " Division Champion!</div>";
     } else {
-      html += '<p class="muted small">Play out the current round yourself — Sim Game resolves one game, Sim Series finishes that matchup — or just hit Advance Week up top to simulate the whole round for you.</p>';
+      html += '<p class="muted small">Play out the current round yourself — Sim Game resolves one game, Sim Series finishes that matchup — or just hit Advance Week to simulate the whole round for you.</p>';
     }
 
     var currentRound = bracket.rounds[bracket.rounds.length - 1];

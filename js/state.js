@@ -39,6 +39,7 @@
     }
   }
   function setActiveMode(mode) {
+    flush(); // persist the slot we're leaving before pointing at another
     try {
       localStorage.setItem(ACTIVE_MODE_KEY, mode === "player" ? "player" : "gm");
     } catch (e) {
@@ -49,6 +50,7 @@
   // argument), without disturbing whichever slot is currently loaded? Used
   // by create-save.html to show "Continue" vs. "Start Fresh" per mode.
   function slotHasSave(mode) {
+    flush();
     try {
       return !!localStorage.getItem(storageKeyForMode(mode || activeMode()));
     } catch (e) {
@@ -57,6 +59,7 @@
   }
 
   function load() {
+    flush(); // never read storage back while newer changes are still pending
     var mode = activeMode();
     var raw = null;
     try {
@@ -203,12 +206,39 @@
     });
   }
 
+  // Every mutation helper calls save(), and one Advance Week can make 50-250
+  // of those calls. Serializing the whole league (hundreds of KB) each time
+  // was ~98% of Advance Week's cost, so save() now just marks the league
+  // dirty and schedules ONE write at the end of the current task (after the
+  // click handler / sim loop that caused the changes has finished). flush()
+  // forces the write immediately — it runs automatically before switching
+  // save slots, before reading storage back, and when the page is hidden or
+  // closed, and callers use it right before navigating to another page.
+  var dirty = false;
+  var flushTimer = null;
   function save() {
+    dirty = true;
+    if (flushTimer == null) flushTimer = setTimeout(flush, 0);
+  }
+  function flush() {
+    if (flushTimer != null) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+    }
+    if (!dirty || !data) return;
+    dirty = false;
     try {
       localStorage.setItem(storageKeyForMode(data.mode), JSON.stringify(data));
     } catch (e) {
       console.warn("Could not save to localStorage:", e);
     }
+  }
+  if (typeof window !== "undefined" && window.addEventListener) {
+    window.addEventListener("pagehide", flush);
+    window.addEventListener("beforeunload", flush);
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "hidden") flush();
+    });
   }
 
   // Resets whichever slot is CURRENTLY active (see activeMode) back to a
@@ -884,6 +914,7 @@
   window.PHLState = {
     load: load,
     save: save,
+    flush: flush,
     resetToStarter: resetToStarter,
     exportJSON: exportJSON,
     importFromObject: importFromObject,

@@ -97,8 +97,14 @@ team chosen yet (a brand-new save, or one wiped via **Data Tools → Reset**).
   clicking separate "simulate," "start playoffs," or "start new season"
   buttons. A single **Advance Week** button lives in the top-right header at
   all times; clicking it moves the calendar forward exactly one week and
-  simulates whatever that week calls for. See **The weekly calendar**
+  simulates whatever that week calls for, then pops up a short toast with
+  your team's results. **Shift+N** does the same from any tab, and on phones
+  the button floats in the bottom-right corner. See **The weekly calendar**
   below for the full season structure it drives.
+- **Saving** — the league saves itself automatically. Changes are written
+  once at the end of each action (and whenever the tab is hidden or closed)
+  rather than after every tiny update, which is what keeps a whole week's
+  simulation down to a few milliseconds.
 - **Season simulation** — the schedule is generated so every team lands on
   an *exact* game count for its division (see below) and simulates games
   using a rating-based engine (team/goalie ratings + randomness decide the

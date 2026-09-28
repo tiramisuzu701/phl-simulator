@@ -33,14 +33,21 @@
       var myTeam = S.getTeam(franchise.teamId);
       var myDiv = S.getDivision(franchise.divisionId);
       html += '<p class="muted small">GM of <strong>' + U.escapeHtml(myTeam ? myTeam.name : "?") + "</strong> (" + U.escapeHtml(myDiv ? myDiv.name : "?") +
-        ') &middot; use <strong>Advance Week</strong> (top right) to move the season forward.</p>';
+        ') &middot; use <strong>Advance Week</strong> (or press Shift+N) to move the season forward.</p>';
       if (myTeam) html += renderMyTeamHub(myTeam);
     }
+    // Season / phase / week already live in the header — these tiles are
+    // about YOUR team instead (record, division rank, goal differential).
     html += '<div class="stat-tile-row">';
-    html += statTile("Season", season.seasonNumber || 1);
-    html += statTile("Phase", capitalize(season.phase || "offseason"));
-    html += statTile("Teams", teams.length);
-    html += statTile("Players Rostered", rostered.length);
+    var mt = franchise.teamId ? S.getTeam(franchise.teamId) : null;
+    if (mt) {
+      var divRank = window.PHLStandings.sortedStandings(mt.division).map(function (t) { return t.id; }).indexOf(mt.id) + 1;
+      var gd = (mt.gf || 0) - (mt.ga || 0);
+      html += statTile("Record", (mt.wins || 0) + "-" + (mt.losses || 0) + "-" + (mt.otLosses || 0));
+      html += statTile("Division Rank", divRank ? "#" + divRank + " of " + S.getTeams(mt.division).length : "—");
+      html += statTile("Points", mt.points || 0);
+      html += statTile("Goal Diff", (gd > 0 ? "+" : "") + gd);
+    }
     html += statTile("Free Agents", freeAgents.length);
     html += "</div>";
 
@@ -127,12 +134,17 @@
   // there's no need to hop between tabs just to see where things stand.
   function renderMyTeamHub(myTeam) {
     var recent = recentForm(myTeam.id, 5);
-    var upcoming = upcomingGames(myTeam.id, 3);
     // Regular-season only (see js/calendar.js myUnplayedGamesThisWeek) —
     // purely an optional preview. Advance Week (top right) is never gated
     // on this; it'll simulate your game(s) right along with the rest of
     // the league if you never bother clicking Sim My Game.
     var myGamesThisWeek = window.PHLCalendar ? window.PHLCalendar.myUnplayedGamesThisWeek() : [];
+    // "Next Up" looks past whatever "This Week" already lists, so the two
+    // panels never show the same games twice.
+    var thisWeekIds = myGamesThisWeek.map(function (g) { return g.id; });
+    var upcoming = upcomingGames(myTeam.id, 3 + thisWeekIds.length).filter(function (g) {
+      return thisWeekIds.indexOf(g.id) === -1;
+    }).slice(0, 3);
     var cap = S.capForTeam(myTeam.id);
     var used = S.capUsed(myTeam.id);
     var space = S.capSpace(myTeam.id);
@@ -164,7 +176,7 @@
 
     html += '<div class="hub-section' + (myGamesThisWeek.length ? " hub-section-alert" : "") + '"><h4>This Week</h4>';
     if (myGamesThisWeek.length) {
-      html += '<p class="pill pill-warn small">You have a game' + (myGamesThisWeek.length > 1 ? "s" : "") +
+      html += '<p class="pill pill-warn small">You have ' + (myGamesThisWeek.length > 1 ? myGamesThisWeek.length + " games" : "a game") +
         " to play this week.</p>";
       html += '<ul class="mini-standings">';
       myGamesThisWeek.forEach(function (g) {
@@ -174,7 +186,7 @@
       });
       html += "</ul>";
       html += '<button class="btn btn-primary btn-sm" data-action="sim-my-games">Sim My Game' + (myGamesThisWeek.length > 1 ? "s" : "") + '</button>';
-      html += '<p class="muted small">Or just hit Advance Week (top right) &mdash; it\'ll simulate this for you automatically.</p>';
+      html += '<p class="muted small">Or just hit Advance Week &mdash; it\'ll simulate this for you automatically.</p>';
     } else {
       html += '<p class="muted small">' +
         (S.getSeason().phase === "regular" ? "No game to simulate this week." : "Nothing to simulate right now.") +

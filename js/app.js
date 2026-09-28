@@ -83,12 +83,11 @@
     updateHeaderMeta();
   }
 
+  // Every tab re-renders from scratch whenever it's shown (see showTab), so
+  // after a state change only the tab actually on screen needs redrawing.
+  // This used to re-render all 17 tabs after every Advance Week.
   function refreshAll() {
-    Object.keys(modules).forEach(function (name) {
-      var el = document.getElementById("tab-" + name);
-      if (modules[name] && el) modules[name].render(el);
-    });
-    updateHeaderMeta();
+    refresh();
   }
 
   function statPill(label, value) {
@@ -96,6 +95,8 @@
   }
 
   function updateHeaderMeta() {
+    var eyebrow = document.getElementById("top-header-eyebrow");
+    if (eyebrow) eyebrow.textContent = S.isBeAPlayerMode() ? "Be A Player" : "GM Mode";
     var meta = document.getElementById("header-meta");
     if (meta) {
       var season = S.getSeason();
@@ -167,6 +168,12 @@
       }
       if (currentTab === "mycareer") showTab("dashboard");
     }
+    // A whole labeled group (e.g. "Front Office" in Be A Player mode) hides
+    // along with its label once every item in it is hidden.
+    document.querySelectorAll(".nav-group").forEach(function (g) {
+      var anyVisible = Array.prototype.some.call(g.querySelectorAll(".nav-item"), function (b) { return b.style.display !== "none"; });
+      g.style.display = anyVisible ? "" : "none";
+    });
   }
 
   function updateInboxBadge() {
@@ -230,27 +237,58 @@
     }
     var blocked = Cal.checkBlocked();
     el.innerHTML =
-      '<span class="week-pill">' + U.escapeHtml(Cal.weekLabel()) + "</span>" +
-      '<button class="btn btn-primary" id="btn-advance-week"' + (blocked ? " disabled" : "") + ">Advance Week &raquo;</button>";
+      '<button class="btn btn-primary btn-advance" id="btn-advance-week"' + (blocked ? " disabled" : "") + ' title="Advance Week (shortcut: Shift+N)">' +
+      "Advance Week &raquo;</button>";
     if (blocked) {
       el.innerHTML += '<span class="warning-banner header-block-warning">' + U.escapeHtml(blocked) + "</span>";
     }
     var btn = document.getElementById("btn-advance-week");
-    if (btn) {
-      btn.addEventListener("click", function () {
-        var result = Cal.advanceWeek();
-        if (!result.advanced) {
-          alert(result.reason);
-          updateAdvanceButton();
-          return;
-        }
-        refreshAll();
-        if (result.summary && result.summary.length) {
-          // A lightweight, non-blocking heads-up rather than a modal per
-          // week — full detail always lives in the relevant tab.
-          console.log("[Advance Week]", result.summary.join(" "));
-        }
-      });
+    if (btn) btn.addEventListener("click", runAdvanceWeek);
+  }
+
+  // Your own team's results from the week that just finished, as a short
+  // line for the post-week toast ("ANC 2-1: W 4-2 vs OAK · L 1-3 @ SOM ...").
+  function myWeekResults(weekNumber, phase) {
+    var teamId = S.myTeamId();
+    if (!teamId || phase !== "regular") return "";
+    var games = S.getSchedule().filter(function (g) {
+      return g.week === weekNumber && g.played && (g.homeTeamId === teamId || g.awayTeamId === teamId);
+    });
+    if (!games.length) return "";
+    var w = 0, l = 0, otl = 0;
+    var parts = games.map(function (g) {
+      var home = g.homeTeamId === teamId;
+      var us = home ? g.homeScore : g.awayScore;
+      var them = home ? g.awayScore : g.homeScore;
+      var opp = S.getTeam(home ? g.awayTeamId : g.homeTeamId);
+      var res = us > them ? "W" : g.wentToOT ? "OTL" : "L";
+      if (res === "W") w++; else if (res === "OTL") otl++; else l++;
+      return res + " " + us + "-" + them + (home ? " vs " : " @ ") + (opp ? opp.abbr : "?");
+    });
+    var team = S.getTeam(teamId);
+    return (team ? team.abbr + " " : "") + "went " + w + "-" + l + "-" + otl + ": " + parts.join(" · ");
+  }
+
+  function runAdvanceWeek() {
+    var Cal = window.PHLCalendar;
+    if (!Cal) return;
+    var before = S.getSeason();
+    var weekBefore = before.calendarWeek;
+    var phaseBefore = before.phase;
+    var labelBefore = Cal.weekLabel();
+    var result = Cal.advanceWeek();
+    if (!result.advanced) {
+      alert(result.reason);
+      updateAdvanceButton();
+      return;
+    }
+    refreshAll();
+    if (window.PHLToast) {
+      var mine = myWeekResults(weekBefore, phaseBefore);
+      var lines = [labelBefore + " done."];
+      if (mine) lines.push(mine);
+      (result.summary || []).filter(function (x) { return !/game\(s\) played across the league/.test(x); }).slice(0, 2).forEach(function (x) { lines.push(x); });
+      window.PHLToast.show(lines.join("  "), { duration: 5000 });
     }
   }
 
@@ -273,7 +311,19 @@
     var saveExit = document.getElementById("btn-save-exit");
     if (saveExit) saveExit.addEventListener("click", function () {
       S.save();
-      alert("Progress saved. Your league lives in this browser — use Data Tools to export a portable backup any time.");
+      S.flush();
+      alert("Progress saved. (The game also saves automatically after every change.) Use Data Tools to export a portable backup any time.");
+    });
+    // Shift+N = Advance Week, from any tab (ignored while typing in a field).
+    document.addEventListener("keydown", function (e) {
+      if (!e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || (e.key !== "N" && e.key !== "n")) return;
+      var tag = (e.target && e.target.tagName) || "";
+      if (/INPUT|TEXTAREA|SELECT/.test(tag) || (e.target && e.target.isContentEditable)) return;
+      var btn = document.getElementById("btn-advance-week");
+      if (btn && !btn.disabled) {
+        e.preventDefault();
+        runAdvanceWeek();
+      }
     });
     if (S.isBeAPlayerMode()) {
       initBeAPlayer();
@@ -286,6 +336,7 @@
     // than showing an empty in-app picker.
     var franchise = S.getFranchise();
     if (!franchise || !franchise.teamId) {
+      S.flush();
       window.location.href = "create-save.html";
       return;
     }
@@ -307,6 +358,7 @@
     if (!mp || (!mp.playerId && !mp.pendingSendOff)) {
       // No active player and nothing pending review — this save never
       // finished being created (or was reset) — back to Create Save.
+      S.flush();
       window.location.href = "create-save.html";
       return;
     }

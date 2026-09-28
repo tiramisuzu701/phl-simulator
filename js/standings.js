@@ -19,6 +19,37 @@
     return teams;
   }
 
+  // Real clinch / elimination math (points only, ties treated as NOT
+  // safe): a team has clinched a top-N finish once fewer than N other teams
+  // can still reach its current points total, and is eliminated once N
+  // teams already have more points than it can possibly reach. Everything
+  // in between is just "currently in position", not clinched.
+  function remainingGames(divisionId) {
+    var rem = {};
+    S.getSchedule(divisionId).forEach(function (g) {
+      if (g.played) return;
+      rem[g.homeTeamId] = (rem[g.homeTeamId] || 0) + 1;
+      rem[g.awayTeamId] = (rem[g.awayTeamId] || 0) + 1;
+    });
+    return rem;
+  }
+  function clinchInfo(teams, divisionId) {
+    var rem = remainingGames(divisionId);
+    var maxPts = {};
+    teams.forEach(function (t) { maxPts[t.id] = t.points + 2 * (rem[t.id] || 0); });
+    function canCatch(t) {
+      return teams.filter(function (o) { return o.id !== t.id && maxPts[o.id] >= t.points; }).length;
+    }
+    function aheadForSure(t) {
+      return teams.filter(function (o) { return o.id !== t.id && o.points > maxPts[t.id]; }).length;
+    }
+    var info = {};
+    teams.forEach(function (t) {
+      info[t.id] = { threats: canCatch(t), lockedAhead: aheadForSure(t) };
+    });
+    return info;
+  }
+
   function playoffFormatText(cfg) {
     if (cfg.teams <= cfg.byes) {
       return "Top " + cfg.teams + " make the playoffs.";
@@ -45,6 +76,7 @@
       }
       var cfg = window.PHLPlayoffs ? window.PHLPlayoffs.getPlayoffConfig(div.id) : { teams: S.getSettings().playoffTeamsPerDivision || 4, byes: S.getSettings().playoffTeamsPerDivision || 4 };
       var hasWildcard = cfg.teams > cfg.byes;
+      var clinch = clinchInfo(teams, div.id);
 
       html += '<table class="data-table standings-table"><thead><tr>' +
         "<th>#</th><th>Team</th><th>GP</th><th>W</th><th>L</th><th>OTL</th><th>PTS</th><th>GF</th><th>GA</th><th>DIFF</th><th></th><th>Status</th>" +
@@ -56,12 +88,19 @@
         var seed = i + 1;
         var rowClass = "";
         var statusPill = "";
-        if (seed <= cfg.byes) {
-          rowClass = "in-playoffs";
-          statusPill = '<span class="pill pill-clinch">' + (hasWildcard ? "Bye" : "Clinched") + "</span>";
+        var ci = clinch[t.id];
+        if (seed <= cfg.byes) rowClass = "in-playoffs";
+        else if (seed <= cfg.teams) rowClass = "in-wildcard";
+        if (hasWildcard && ci.threats < cfg.byes) {
+          statusPill = '<span class="pill pill-clinch">Clinched Bye</span>';
+        } else if (ci.threats < cfg.teams) {
+          statusPill = '<span class="pill pill-clinch">Clinched</span>';
+        } else if (ci.lockedAhead >= cfg.teams) {
+          statusPill = '<span class="pill pill-loss">Eliminated</span>';
+        } else if (seed <= cfg.byes) {
+          statusPill = '<span class="pill pill-accent">' + (hasWildcard ? "Bye Spot" : "Playoff Spot") + "</span>";
         } else if (seed <= cfg.teams) {
-          rowClass = "in-wildcard";
-          statusPill = '<span class="pill pill-warn">Wild Card</span>';
+          statusPill = '<span class="pill pill-warn">Wild Card Spot</span>';
         } else {
           statusPill = '<span class="muted small">&mdash;</span>';
         }
@@ -76,7 +115,7 @@
         html += "</tr>";
       });
       html += "</tbody></table>";
-      html += '<p class="muted small">' + playoffFormatText(cfg) + "</p>";
+      html += '<p class="muted small">' + playoffFormatText(cfg) + " &ldquo;Spot&rdquo; = currently in position; &ldquo;Clinched&rdquo; = mathematically locked in.</p>";
       html += "</div>";
     });
 

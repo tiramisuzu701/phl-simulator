@@ -189,7 +189,7 @@
     var html = '<div class="form-card"><h3>Season ' + S.getSeason().seasonNumber + '</h3><p class="muted">Phase: ' + U.escapeHtml(S.getSeason().phase) +
       (retiredCount ? " &middot; " + retiredCount + " retired legend(s)" : "") + '</p>';
     html += "<p>Aging, decline, retirement, contract expiry, the breakout rookie class, and building the next schedule all " +
-      "now happen automatically when Advance Week (top right) rolls out of the off-season — nothing to click here. " +
+      "now happen automatically when Advance Week rolls out of the off-season — nothing to click here. " +
       "You can still drop in an extra rookie class by hand any time if you want more free agents on the market.</p>";
     html += '<button class="btn" data-action="gen-rookies">Generate Rookie Class Only</button></div>';
     return html;

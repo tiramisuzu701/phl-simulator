@@ -50,6 +50,7 @@
     container.querySelector('[data-action="reset"]').addEventListener("click", function () {
       if (confirm("Reset everything to the starter PHL league? This cannot be undone (export first if you want to keep it).")) {
         S.resetToStarter();
+        S.flush();
         window.location.href = "create-save.html";
       }
     });

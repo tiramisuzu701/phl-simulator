@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PHL Franchise Simulator — Puck Fantasy League</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="stylesheet" href="css/style.css?v=20260928a">
+<link rel="stylesheet" href="css/style.css?v=20260928b">
 </head>
 <body>
   <div class="app-shell">
@@ -20,29 +20,36 @@
 
       <div class="sidebar-franchise" id="sidebar-franchise"></div>
 
-      <div class="sidebar-section-label">Navigation</div>
       <nav class="sidebar-nav" id="tab-nav">
-        <button class="nav-item" data-tab="dashboard"><span class="nav-icon">&#9673;</span><span>Dashboard</span></button>
-        <button class="nav-item" data-tab="mycareer" style="display:none"><span class="nav-icon">&#127937;</span><span>My Career</span></button>
-        <button class="nav-item" data-tab="startup"><span class="nav-icon">&#9873;</span><span>Startup Draft</span></button>
-        <button class="nav-item" data-tab="office" style="display:none"><span class="nav-icon">&#9974;</span><span>Office</span></button>
-        <button class="nav-item" data-tab="inbox"><span class="nav-icon">&#128233;</span><span>Inbox</span></button>
-        <button class="nav-item" data-tab="teams"><span class="nav-icon">&#9974;</span><span>Teams</span></button>
-        <button class="nav-item" data-tab="schedule"><span class="nav-icon">&#128197;</span><span>Schedule</span></button>
-        <button class="nav-item" data-tab="standings"><span class="nav-icon">&#9776;</span><span>Standings</span></button>
-        <button class="nav-item" data-tab="playoffs"><span class="nav-icon">&#127942;</span><span>Playoffs</span></button>
-        <button class="nav-item" data-tab="trades"><span class="nav-icon">&#8646;</span><span>Trades</span></button>
-        <button class="nav-item" data-tab="promotions"><span class="nav-icon">&#8593;</span><span>Promotions</span></button>
-        <button class="nav-item" data-tab="scrims"><span class="nav-icon">&#9889;</span><span>Scrims</span></button>
-        <button class="nav-item" data-tab="strategy"><span class="nav-icon">&#9975;</span><span>Strategy</span></button>
-        <button class="nav-item" data-tab="stats"><span class="nav-icon">&#128200;</span><span>Stats &amp; Offseason</span></button>
-        <button class="nav-item" data-tab="log"><span class="nav-icon">&#128220;</span><span>League Log</span></button>
-        <button class="nav-item" data-tab="data"><span class="nav-icon">&#128451;</span><span>Data Tools</span></button>
+        <div class="nav-group">
+          <button class="nav-item" data-tab="dashboard"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg><span class="nav-label">Dashboard</span></button>
+          <button class="nav-item" data-tab="mycareer" style="display:none"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg><span class="nav-label">My Career</span></button>
+          <button class="nav-item" data-tab="startup"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg><span class="nav-label">Startup Draft</span></button>
+          <button class="nav-item" data-tab="inbox"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/></svg><span class="nav-label">Inbox</span></button>
+        </div>
+        <div class="nav-group" data-group="front-office">
+          <div class="sidebar-section-label">Front Office</div>
+          <button class="nav-item" data-tab="office" style="display:none"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/></svg><span class="nav-label">Office</span></button>
+          <button class="nav-item" data-tab="strategy"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg><span class="nav-label">Strategy</span></button>
+          <button class="nav-item" data-tab="scrims"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg><span class="nav-label">Scrims</span></button>
+          <button class="nav-item" data-tab="trades"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16l-4-4M20 17H4l4 4"/></svg><span class="nav-label">Trades</span></button>
+          <button class="nav-item" data-tab="promotions"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20V5M5 12l7-7 7 7"/></svg><span class="nav-label">Promotions</span></button>
+        </div>
+        <div class="nav-group" data-group="league">
+          <div class="sidebar-section-label">League</div>
+          <button class="nav-item" data-tab="schedule"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span class="nav-label">Schedule</span></button>
+          <button class="nav-item" data-tab="standings"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><rect x="5" y="11" width="3.5" height="10" rx="0.5"/><rect x="10.25" y="5" width="3.5" height="16" rx="0.5"/><rect x="15.5" y="14" width="3.5" height="7" rx="0.5"/></svg><span class="nav-label">Standings</span></button>
+          <button class="nav-item" data-tab="playoffs"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg><span class="nav-label">Playoffs</span></button>
+          <button class="nav-item" data-tab="teams"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg><span class="nav-label">Teams</span></button>
+          <button class="nav-item" data-tab="stats"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg><span class="nav-label">Stats &amp; Offseason</span></button>
+          <button class="nav-item" data-tab="log"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h6"/></svg><span class="nav-label">League Log</span></button>
+        </div>
       </nav>
 
       <div class="sidebar-bottom">
-        <button class="btn-sidebar-action" id="btn-save-exit">
-          <span class="nav-icon">&#8617;</span><span>Save Progress</span>
+        <button class="nav-item" data-tab="data"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg><span class="nav-label">Data Tools</span></button>
+        <button class="btn-sidebar-action" id="btn-save-exit" title="Save progress (also saves automatically)">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg><span class="nav-label">Save Progress</span>
         </button>
       </div>
     </aside>
@@ -50,7 +57,7 @@
     <div class="main-area">
       <header class="top-header">
         <div class="top-header-title">
-          <div class="top-header-eyebrow">Career Mode</div>
+          <div class="top-header-eyebrow" id="top-header-eyebrow">PHL</div>
           <h1 id="top-header-heading">Dashboard</h1>
         </div>
         <div class="top-header-stats" id="header-meta"></div>
@@ -87,40 +94,40 @@
 
   <!-- Plain scripts (no ES modules) so this runs from a double-clicked
        index.html as well as from GitHub Pages / any static host. -->
-  <script src="js/utils.js?v=20260928a"></script>
-  <script src="js/toast.js?v=20260928a"></script>
-  <script src="js/boxscoreModal.js?v=20260928a"></script>
-  <script src="js/negotiationModal.js?v=20260928a"></script>
-  <script src="js/starterData.js?v=20260928a"></script>
-  <script src="js/state.js?v=20260928a"></script>
-  <script src="js/sim.js?v=20260928a"></script>
-  <script src="js/startupDraft.js?v=20260928a"></script>
-  <script src="js/teamManagement.js?v=20260928a"></script>
-  <script src="js/inbox.js?v=20260928a"></script>
-  <script src="js/mvp.js?v=20260928a"></script>
-  <script src="js/awards.js?v=20260928a"></script>
-  <script src="js/hallOfFame.js?v=20260928a"></script>
-  <script src="js/scrims.js?v=20260928a"></script>
-  <script src="js/playerMessages.js?v=20260928a"></script>
-  <script src="js/strategy.js?v=20260928a"></script>
-  <script src="js/teams.js?v=20260928a"></script>
-  <script src="js/players.js?v=20260928a"></script>
-  <script src="js/schedule.js?v=20260928a"></script>
-  <script src="js/standings.js?v=20260928a"></script>
-  <script src="js/playoffs.js?v=20260928a"></script>
-  <script src="js/promotions.js?v=20260928a"></script>
-  <script src="js/contracts.js?v=20260928a"></script>
-  <script src="js/office.js?v=20260928a"></script>
-  <script src="js/stats.js?v=20260928a"></script>
-  <script src="js/aiManager.js?v=20260928a"></script>
-  <script src="js/gmOffers.js?v=20260928a"></script>
-  <script src="js/trades.js?v=20260928a"></script>
-  <script src="js/careerMode.js?v=20260928a"></script>
-  <script src="js/calendar.js?v=20260928a"></script>
-  <script src="js/teamDetail.js?v=20260928a"></script>
-  <script src="js/dashboard.js?v=20260928a"></script>
-  <script src="js/leagueLog.js?v=20260928a"></script>
-  <script src="js/datatools.js?v=20260928a"></script>
-  <script src="js/app.js?v=20260928a"></script>
+  <script src="js/utils.js?v=20260928b"></script>
+  <script src="js/toast.js?v=20260928b"></script>
+  <script src="js/boxscoreModal.js?v=20260928b"></script>
+  <script src="js/negotiationModal.js?v=20260928b"></script>
+  <script src="js/starterData.js?v=20260928b"></script>
+  <script src="js/state.js?v=20260928b"></script>
+  <script src="js/sim.js?v=20260928b"></script>
+  <script src="js/startupDraft.js?v=20260928b"></script>
+  <script src="js/teamManagement.js?v=20260928b"></script>
+  <script src="js/inbox.js?v=20260928b"></script>
+  <script src="js/mvp.js?v=20260928b"></script>
+  <script src="js/awards.js?v=20260928b"></script>
+  <script src="js/hallOfFame.js?v=20260928b"></script>
+  <script src="js/scrims.js?v=20260928b"></script>
+  <script src="js/playerMessages.js?v=20260928b"></script>
+  <script src="js/strategy.js?v=20260928b"></script>
+  <script src="js/teams.js?v=20260928b"></script>
+  <script src="js/players.js?v=20260928b"></script>
+  <script src="js/schedule.js?v=20260928b"></script>
+  <script src="js/standings.js?v=20260928b"></script>
+  <script src="js/playoffs.js?v=20260928b"></script>
+  <script src="js/promotions.js?v=20260928b"></script>
+  <script src="js/contracts.js?v=20260928b"></script>
+  <script src="js/office.js?v=20260928b"></script>
+  <script src="js/stats.js?v=20260928b"></script>
+  <script src="js/aiManager.js?v=20260928b"></script>
+  <script src="js/gmOffers.js?v=20260928b"></script>
+  <script src="js/trades.js?v=20260928b"></script>
+  <script src="js/careerMode.js?v=20260928b"></script>
+  <script src="js/calendar.js?v=20260928b"></script>
+  <script src="js/teamDetail.js?v=20260928b"></script>
+  <script src="js/dashboard.js?v=20260928b"></script>
+  <script src="js/leagueLog.js?v=20260928b"></script>
+  <script src="js/datatools.js?v=20260928b"></script>
+  <script src="js/app.js?v=20260928b"></script>
 </body>
 </html>
