@@ -94,6 +94,7 @@
     // still picks it up, same spirit as every other field below.
     if (d.myPlayer.tradeRequested == null) d.myPlayer.tradeRequested = false;
     if (d.myPlayer.gameplanChoice === undefined) d.myPlayer.gameplanChoice = null;
+    if (d.myPlayer.trainingFocus === undefined) d.myPlayer.trainingFocus = null;
     if (!d.myPlayer.pastCareers) d.myPlayer.pastCareers = [];
     if (d.myPlayer.pendingSendOff === undefined) d.myPlayer.pendingSendOff = null;
     if (!d.myPlayer.milestonesHit) d.myPlayer.milestonesHit = [];

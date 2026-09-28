@@ -36,8 +36,6 @@
     expLogoDataUrl: null,
   };
 
-  var playerForm = { name: "", position: "F", archetype: "" };
-
   function starterDivisions() {
     return STARTER.divisions.slice().sort(function (a, b) {
       return b.tier - a.tier;
@@ -137,48 +135,20 @@
   }
 
   // ---------------- Be A Player wizard -------------------------------------
+  // The actual multi-step tryouts -> draft day flow lives in
+  // js/careerMode.js (shared with My Career's own "no player yet" / send-off
+  // screens for every career after a retirement) — this page just resets to
+  // a fresh starter league in the player slot and mounts that shared flow.
   function renderPlayerWizard() {
-    var position = playerForm.position;
-    if (!playerForm.archetype || !U.archetypesFor(position).some(function (a) { return a.name === playerForm.archetype; })) {
-      playerForm.archetype = U.randomArchetype(position);
-    }
-    var posLabels = { F: "Forward", D: "Defense", G: "Goalie" };
+    S.resetToStarter(); // a fresh league in the player slot (active mode is already "player" — see enterMode)
     var html = backLinkHtml();
-    html += '<div class="form-card"><h3>Create Your Player</h3>';
-    html += '<p class="muted small">You\'ll enter the league as a rookie prospect and land on a Prospect-division team through a lightweight amateur draft placement &mdash; an AI runs everything else about that team (roster, contracts, trades, lineup). You just play.</p>';
-    html += '<div class="form-grid">';
-    html += '<label>Name<input type="text" id="p-name" value="' + U.escapeHtml(playerForm.name) + '" placeholder="Leave blank for a random gamertag"></label>';
-    html += '<label>Position<select id="p-position">' + ["F", "D", "G"].map(function (pos) {
-      return '<option value="' + pos + '"' + (pos === position ? " selected" : "") + ">" + posLabels[pos] + "</option>";
-    }).join("") + "</select></label>";
-    html += '<label>Archetype<select id="p-archetype">' + U.archetypesFor(position).map(function (a) {
-      return '<option value="' + U.escapeHtml(a.name) + '"' + (a.name === playerForm.archetype ? " selected" : "") + ">" + U.escapeHtml(a.name) + "</option>";
-    }).join("") + "</select></label>";
-    html += "</div></div>";
-    html += '<div class="wizard-footer"><button class="btn btn-primary" data-action="submit-player">Enter the League &raquo;</button></div>';
+    html += '<div id="mc-flow-root"></div>';
     root.innerHTML = html;
     wireBackLink();
-    wirePlayerWizardEvents();
-  }
-
-  function wirePlayerWizardEvents() {
-    var nameInput = root.querySelector("#p-name");
-    if (nameInput) nameInput.addEventListener("input", function (e) { playerForm.name = e.target.value; });
-    var posSel = root.querySelector("#p-position");
-    if (posSel) posSel.addEventListener("change", function (e) {
-      playerForm.position = e.target.value;
-      playerForm.archetype = U.randomArchetype(playerForm.position);
-      renderPlayerWizard();
+    var flowRoot = root.querySelector("#mc-flow-root");
+    window.PHLCareerMode.renderCareerCreationFlow(flowRoot, function () {
+      window.location.href = "index.html";
     });
-    var archSel = root.querySelector("#p-archetype");
-    if (archSel) archSel.addEventListener("change", function (e) { playerForm.archetype = e.target.value; });
-    root.querySelector('[data-action="submit-player"]').addEventListener("click", submitPlayerWizard);
-  }
-
-  function submitPlayerWizard() {
-    S.resetToStarter(); // a fresh league in the player slot (active mode is already "player" — see enterMode)
-    window.PHLCareerMode.createPlayerAndEnterDraft({ name: playerForm.name, position: playerForm.position, archetype: playerForm.archetype });
-    window.location.href = "index.html";
   }
 
   // ---------------- GM Franchise wizard (unchanged from before Be A Player

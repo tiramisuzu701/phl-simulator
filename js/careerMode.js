@@ -25,8 +25,16 @@
   "use strict";
   var S = window.PHLState;
   var U = window.PHLUtil;
-  var container = null;
-  var createForm = { name: "", position: "F", archetype: "" };
+  var container = null; // the My Career tab's own container (render/wireHub)
+  // Separate container + state for the multi-step "create a player" flow
+  // (tryouts -> draft day -> finalize) — shared by createSave.js (a save's
+  // very first career) and My Career's own "no player yet" / send-off
+  // screens (every career after a retirement). Kept independent of
+  // `container` above so the two concerns never stomp on each other, since
+  // they can be mounted on entirely different pages.
+  var flowContainer = null;
+  var onCareerCreated = null;
+  var creationFlow = null;
 
   // ---------------- Gameplan (pre-game choice) ----------------------------
   // Position-aware attribute deltas fed straight into js/sim.js's existing
@@ -72,6 +80,121 @@
     return U.archetypesFor(position).some(function (a) { return a.name === name; });
   }
 
+  // ---------------- Training focus (weekly, permanent, capped at Potential)
+  // Distinct from Gameplan above: Gameplan is a one-game performance nudge
+  // that's spent and cleared every week (see clearGameplanChoiceForNextWeek);
+  // Training is a standing choice that sticks until you change it, and
+  // instead of nudging one game, has a small weekly CHANCE of nudging your
+  // real, permanent Overall (and the matching attribute) — bounded by your
+  // existing Potential ceiling exactly the same way every other player's
+  // ordinary season-end growth is (see js/stats.js developPlayer). It never
+  // pushes you past that ceiling; it just gives you a way to lean into
+  // reaching it faster, on top of the growth that already happens for free.
+  var TRAINING_FOCUSES = [
+    { key: "offense", label: "Offense Training", desc: "Drill shooting, passing, and playmaking.", positions: ["F", "D", "G"] },
+    { key: "defense", label: "Defense Training", desc: "Work on positioning and physical play.", positions: ["F", "D", "G"] },
+    { key: "goaltending", label: "Goaltending Training", desc: "Reps in the crease — reflexes and rebound control.", positions: ["G"] },
+    { key: "conditioning", label: "Conditioning", desc: "General fitness and consistency — a smaller, steady all-around gain.", positions: ["F", "D", "G"] },
+  ];
+
+  function trainingFocusesFor(position) {
+    return TRAINING_FOCUSES.filter(function (f) { return f.positions.indexOf(position) !== -1; });
+  }
+
+  function setTrainingFocus(key) {
+    var d = S.getData();
+    if (!d.myPlayer) return;
+    d.myPlayer.trainingFocus = key || null;
+    S.save();
+  }
+
+  // A miss most weeks is intentional — a guaranteed weekly tick would
+  // trivialize reaching Potential. When it hits, the trained attribute gets
+  // an extra small nudge on top of the recomputed baseline so the choice of
+  // focus is actually visible in HOW the player improves, not just the
+  // Overall number.
+  function applyWeeklyTraining(p, mp) {
+    if (!mp.trainingFocus) return;
+    if (p.overall >= p.potential) return;
+    var focus = TRAINING_FOCUSES.filter(function (f) { return f.key === mp.trainingFocus; })[0];
+    if (!focus || focus.positions.indexOf(p.position) === -1) return;
+    var chance = focus.key === "conditioning" ? 0.35 : 0.28;
+    if (Math.random() > chance) return;
+    var newOverall = U.clamp(p.overall + 1, p.overall, p.potential);
+    var newAttributes = U.deriveAttributes(newOverall, p.position, p.archetype);
+    if (focus.key !== "conditioning" && newAttributes[focus.key] != null) {
+      newAttributes[focus.key] = U.clamp(newAttributes[focus.key] + 2, 40, 99);
+    }
+    S.updatePlayer(p.id, { overall: newOverall, attributes: newAttributes });
+    if (newOverall > p.overall) {
+      S.addNotification({ type: "career", title: "Training Payoff", body: "Your " + focus.label.toLowerCase() + " is paying off — Overall is now " + newOverall + "." });
+    }
+  }
+
+  // ---------------- Tryouts (pre-draft) ------------------------------------
+  // Each approach rolls an "impression score" on roughly the same 0-99 scale
+  // as Overall, centered on your true Overall but with a risk/reward spread
+  // that varies by approach — feeds the draft stock used to decide both how
+  // early you're picked (see pickIndexFromStock) and a small one-time
+  // Overall bump/penalty before Potential is even rolled (see
+  // beginDraftDay), so a strong tryout tangibly pays off and a poor one has
+  // a real (small) cost, without ever needing to touch a real player record.
+  var TRYOUT_APPROACHES = [
+    {
+      key: "safe",
+      label: "Play It Safe",
+      desc: "Stick to fundamentals — a steady, low-risk showing.",
+      roll: function (overall) { return U.clamp(overall + U.randInt(-5, 8), 20, 99); },
+    },
+    {
+      key: "bold",
+      label: "Show Off",
+      desc: "Take risks to stand out — could dazzle scouts, could backfire.",
+      roll: function (overall) { return U.clamp(overall + U.randInt(-18, 22), 10, 99); },
+    },
+    {
+      key: "technical",
+      label: "Focus on Fundamentals",
+      desc: "A balanced, technically sound showing.",
+      roll: function (overall) { return U.clamp(overall + U.randInt(-8, 12), 15, 99); },
+    },
+  ];
+
+  function tryoutGrade(diff) {
+    if (diff >= 15) return "Elite";
+    if (diff >= 6) return "Great";
+    if (diff >= -2) return "Good";
+    if (diff >= -10) return "Average";
+    return "Poor";
+  }
+
+  // Weighted toward whichever Prospect-division team is thinnest at your
+  // position (and, as a tiebreak, smallest roster overall), with a random
+  // jitter so it doubles as this player's "draft order" — a plausible
+  // pick-by-pick sequence without needing a real draft board. Falls back to
+  // any team at all if Prospect somehow has none (a heavily customized
+  // league).
+  function buildDraftOrder(position) {
+    var teams = S.getTeams("prospect");
+    if (!teams.length) teams = S.getTeams();
+    var scored = teams.map(function (t) {
+      var roster = S.getRoster(t.id);
+      var atPos = roster.filter(function (p) { return p.position === position; }).length;
+      var need = 1 / (1 + atPos) + (1 / (1 + roster.length)) * 0.3;
+      return { t: t, key: need + Math.random() * 0.6 };
+    });
+    scored.sort(function (a, b) { return b.key - a.key; });
+    return scored.map(function (s) { return s.t; });
+  }
+
+  // Better tryouts (higher average impression score) -> an earlier pick.
+  function pickIndexFromStock(stock, teamCount) {
+    if (!teamCount) return 0;
+    var normalized = U.clamp(stock, 0, 99) / 99;
+    var idx = Math.round((1 - normalized) * (teamCount - 1));
+    return U.clamp(idx, 0, teamCount - 1);
+  }
+
   function gameplanDef(key) {
     return GAMEPLANS.filter(function (g) { return g.key === key; })[0] || null;
   }
@@ -113,14 +236,19 @@
   }
 
   // ---------------- Entering the league (amateur draft placement) --------
-  // Deliberately NOT a full pick-by-pick draft board — that machinery
-  // (js/startupDraft.js) exists to distribute the real player pool across
-  // every team once per save, a very different job. Placement here mirrors
-  // js/stats.js's breakout-rookie tiers instead (most prospects are raw;
-  // a real difference-maker on day one is rare), just scoped to a single
-  // player: rollPotential, generateRookieAge, deriveAttributes, and the
-  // same 70%-of-asking-price entry contract the real Startup Draft uses are
-  // all reused as-is.
+  // Deliberately NOT a full pick-by-pick draft board of the REAL player pool
+  // — that machinery (js/startupDraft.js) exists to distribute that pool
+  // across every team once per save, a very different job. Placement here
+  // mirrors js/stats.js's breakout-rookie tiers instead (most prospects are
+  // raw; a real difference-maker on day one is rare), just scoped to a
+  // single player: rollPotential, generateRookieAge, deriveAttributes, and
+  // the same 70%-of-asking-price entry contract the real Startup Draft uses
+  // are all reused as-is. The tryouts + draft-day ceremony below (see
+  // renderCareerCreationFlow) decides the actual Overall/team; this function
+  // is a simpler, instant fallback path used only for programmatic/direct
+  // creation (no UI ceremony) — kept because it's a reasonable public API in
+  // its own right, not because anything here still calls it for the normal
+  // "create a player" flow.
   function rollStartingOverall() {
     var roll = Math.random();
     if (roll < 0.05) return U.randInt(78, 86); // rare, can't-miss prospect
@@ -128,28 +256,6 @@
     return U.randInt(48, 64); // typical raw prospect — most common outcome
   }
 
-  // Weighted toward whichever Prospect-division team is thinnest at your
-  // position (and, as a tiebreak, smallest roster overall) — a plausible
-  // "who drafts you" without needing a real draft board. Falls back to any
-  // team at all if Prospect somehow has none (a heavily customized league).
-  function pickAmateurTeam(position) {
-    var teams = S.getTeams("prospect");
-    if (!teams.length) teams = S.getTeams();
-    if (!teams.length) return null;
-    var scored = teams.map(function (t) {
-      var roster = S.getRoster(t.id);
-      var atPos = roster.filter(function (p) { return p.position === position; }).length;
-      var weight = 1 / (1 + atPos) + (1 / (1 + roster.length)) * 0.3;
-      return { item: t, weight: weight };
-    });
-    return U.weightedPick(scored) || teams[0];
-  }
-
-  // Creates the user's custom player, places them on a Prospect team, and
-  // points data.myPlayer.playerId at them. Used both for a save's very
-  // first career (see js/createSave.js) and for every subsequent career
-  // after a retirement send-off (see startNewCareer below) — the league
-  // itself is untouched either way, only the player identity changes.
   function createPlayerAndEnterDraft(opts) {
     opts = opts || {};
     var position = opts.position === "D" || opts.position === "G" ? opts.position : "F";
@@ -157,20 +263,28 @@
     var name = (opts.name || "").trim() || U.randomGamertag();
     var overall = rollStartingOverall();
     var potential = U.rollPotential(overall);
+    var order = buildDraftOrder(position);
+    var team = order.length ? order[0] : null;
+    return finalizePlayerRecord({ name: name, position: position, archetype: archetype, overall: overall, potential: potential, team: team });
+  }
+
+  // The one place that actually writes the player record and points
+  // data.myPlayer at them, however they got here (the instant path above,
+  // or the tryouts/draft-day flow below).
+  function finalizePlayerRecord(spec) {
     var age = U.generateRookieAge();
-    var askingBase = U.salaryAsking(overall, potential);
+    var askingBase = U.salaryAsking(spec.overall, spec.potential);
     var entrySalary = Math.max(U.SALARY_MIN, Math.round((askingBase * 0.7) / 500) * 500);
-    var team = pickAmateurTeam(position);
     var player = {
-      name: name,
-      position: position,
-      archetype: archetype,
-      overall: overall,
-      potential: potential,
-      attributes: U.deriveAttributes(overall, position, archetype),
+      name: spec.name,
+      position: spec.position,
+      archetype: spec.archetype,
+      overall: spec.overall,
+      potential: spec.potential,
+      attributes: U.deriveAttributes(spec.overall, spec.position, spec.archetype),
       salary: entrySalary,
       contractYears: 2,
-      teamId: team ? team.id : null,
+      teamId: spec.team ? spec.team.id : null,
       isDraftProspect: false,
       age: age,
       retirementAge: U.retirementAgeFor(age),
@@ -184,18 +298,208 @@
     d.myPlayer.pendingSendOff = null;
     d.myPlayer.tradeRequested = false;
     d.myPlayer.gameplanChoice = null;
+    d.myPlayer.trainingFocus = null;
     d.myPlayer.milestonesHit = [];
     S.save();
     if (window.PHLInbox) {
       window.PHLInbox.addNotification({
         type: "career",
         title: "Welcome to the PHL",
-        body: team
-          ? "You've entered the league as a " + position + " for " + team.name + "!"
-          : "You've entered the league as a " + position + " — no team was available to place you on yet.",
+        body: spec.team
+          ? spec.team.name + " selected you in the amateur draft — welcome to the PHL!"
+          : "You've entered the league as a " + spec.position + " — no team was available to place you on yet.",
       });
     }
     return created;
+  }
+
+  // ---------------- Career creation flow (tryouts -> draft day) -----------
+  // A small multi-step wizard shared by js/createSave.js (a save's very
+  // first career) and My Career's own "no player yet" / send-off screens
+  // (every career after a retirement). `el` is mounted fresh each step
+  // (its innerHTML is fully owned by this flow); `onComplete(createdPlayer)`
+  // fires once the player is actually created. Resumable: calling this
+  // again with the flow already in progress just re-renders wherever it
+  // left off (e.g. after switching tabs and back), it does not restart.
+  function renderCareerCreationFlow(el, onComplete) {
+    flowContainer = el;
+    onCareerCreated = onComplete;
+    if (!creationFlow) {
+      creationFlow = {
+        step: "form",
+        form: { name: "", position: "F", archetype: "" },
+        overall: null,
+        potential: null,
+        draftStock: null,
+        tryoutTeams: [],
+        tryoutIndex: 0,
+        impressions: [],
+        draftOrder: [],
+        pickIndex: 0,
+        team: null,
+        revealIndex: 0,
+      };
+    }
+    renderFlowStep();
+  }
+
+  function renderFlowStep() {
+    if (!flowContainer || !creationFlow) return;
+    if (creationFlow.step === "tryouts") renderFlowTryoutStep();
+    else if (creationFlow.step === "draft") renderFlowDraftStep();
+    else renderFlowFormStep();
+  }
+
+  function renderFlowFormStep() {
+    var f = creationFlow.form;
+    if (!f.archetype || !archetypeExists(f.position, f.archetype)) f.archetype = U.randomArchetype(f.position);
+    var html = '<div class="form-card"><h3>Create Your Player</h3>';
+    html += '<p class="muted small">You\'ll try out for a few Prospect-division teams, then find out where the amateur draft sends you.</p>';
+    html += '<div class="form-grid">';
+    html += '<label>Name<input type="text" id="cf-name" value="' + U.escapeHtml(f.name) + '" placeholder="Leave blank for a random gamertag"></label>';
+    html += '<label>Position<select id="cf-position">' + positionOptions(f.position) + "</select></label>";
+    html += '<label>Archetype<select id="cf-archetype">' + archetypeOptions(f.position, f.archetype) + "</select></label>";
+    html += "</div>";
+    html += '<div class="form-actions"><button class="btn btn-primary" data-action="begin-tryouts">Begin Tryouts &raquo;</button></div>';
+    html += "</div>";
+    flowContainer.innerHTML = html;
+    var nameInput = flowContainer.querySelector("#cf-name");
+    if (nameInput) nameInput.addEventListener("input", function (e) { f.name = e.target.value; });
+    var posSel = flowContainer.querySelector("#cf-position");
+    if (posSel) posSel.addEventListener("change", function (e) {
+      f.position = e.target.value;
+      f.archetype = U.randomArchetype(f.position);
+      renderFlowFormStep();
+    });
+    var archSel = flowContainer.querySelector("#cf-archetype");
+    if (archSel) archSel.addEventListener("change", function (e) { f.archetype = e.target.value; });
+    var beginBtn = flowContainer.querySelector('[data-action="begin-tryouts"]');
+    if (beginBtn) beginBtn.addEventListener("click", beginTryouts);
+  }
+
+  function beginTryouts() {
+    var f = creationFlow.form;
+    creationFlow.overall = rollStartingOverall();
+    var teams = S.getTeams("prospect");
+    if (!teams.length) teams = S.getTeams();
+    var shuffled = teams.slice().sort(function () { return Math.random() - 0.5; });
+    creationFlow.tryoutTeams = shuffled.slice(0, Math.min(3, shuffled.length));
+    creationFlow.tryoutIndex = 0;
+    creationFlow.impressions = [];
+    creationFlow.step = "tryouts";
+    renderFlowStep();
+  }
+
+  function renderFlowTryoutStep() {
+    var idx = creationFlow.tryoutIndex;
+    if (!creationFlow.tryoutTeams.length || idx >= creationFlow.tryoutTeams.length) {
+      renderFlowTryoutSummary();
+      return;
+    }
+    var team = creationFlow.tryoutTeams[idx];
+    var html = '<div class="form-card"><h3>Tryout ' + (idx + 1) + " of " + creationFlow.tryoutTeams.length + " &mdash; " +
+      U.crestHtml(team, "crest-sm") + U.escapeHtml(team.name) + "</h3>";
+    html += '<p class="muted small">How do you want to approach this tryout?</p>';
+    html += '<div class="chip-row">';
+    TRYOUT_APPROACHES.forEach(function (a) {
+      html += '<button class="chip" data-approach="' + a.key + '" title="' + U.escapeHtml(a.desc) + '">' + U.escapeHtml(a.label) + "</button>";
+    });
+    html += "</div></div>";
+    flowContainer.innerHTML = html;
+    flowContainer.querySelectorAll("[data-approach]").forEach(function (b) {
+      b.addEventListener("click", function () { runTryout(team, b.dataset.approach); });
+    });
+  }
+
+  function runTryout(team, approachKey) {
+    var approach = TRYOUT_APPROACHES.filter(function (a) { return a.key === approachKey; })[0] || TRYOUT_APPROACHES[0];
+    var score = approach.roll(creationFlow.overall);
+    creationFlow.impressions.push({ teamId: team.id, teamName: team.name, approachLabel: approach.label, score: score });
+    creationFlow.tryoutIndex += 1;
+    renderFlowStep();
+  }
+
+  function renderFlowTryoutSummary() {
+    var html = '<div class="form-card"><h3>Tryout Results</h3>';
+    html += '<table class="data-table compact"><thead><tr><th>Team</th><th>Approach</th><th>Grade</th></tr></thead><tbody>';
+    creationFlow.impressions.forEach(function (imp) {
+      var diff = imp.score - creationFlow.overall;
+      html += "<tr><td>" + U.escapeHtml(imp.teamName) + "</td><td>" + U.escapeHtml(imp.approachLabel) + "</td><td>" + tryoutGrade(diff) + "</td></tr>";
+    });
+    html += "</tbody></table>";
+    html += '<div class="form-actions"><button class="btn btn-primary" data-action="continue-to-draft">Continue to Draft Day &raquo;</button></div>';
+    html += "</div>";
+    flowContainer.innerHTML = html;
+    flowContainer.querySelector('[data-action="continue-to-draft"]').addEventListener("click", beginDraftDay);
+  }
+
+  function beginDraftDay() {
+    var avgStock = creationFlow.impressions.length ? U.avg(creationFlow.impressions.map(function (i) { return i.score; })) : creationFlow.overall;
+    var bump = U.clamp(Math.round((avgStock - creationFlow.overall) / 6), -3, 3);
+    var finalOverall = U.clamp(creationFlow.overall + bump, 30, 99);
+    creationFlow.overall = finalOverall;
+    creationFlow.potential = U.rollPotential(finalOverall);
+    creationFlow.draftStock = avgStock;
+    creationFlow.draftOrder = buildDraftOrder(creationFlow.form.position);
+    creationFlow.pickIndex = pickIndexFromStock(avgStock, creationFlow.draftOrder.length);
+    creationFlow.team = creationFlow.draftOrder.length ? creationFlow.draftOrder[creationFlow.pickIndex] : null;
+    creationFlow.revealIndex = 0;
+    creationFlow.step = "draft";
+    renderFlowStep();
+  }
+
+  function renderFlowDraftStep() {
+    var html = '<div class="form-card"><h3>Draft Day</h3>';
+    html += '<p class="muted small">The Prospect-division amateur draft is underway.</p>';
+    if (!creationFlow.draftOrder.length) {
+      html += '<p class="muted">No Prospect-division teams available to draft you — entering as a free agent instead.</p>';
+      html += '<div class="form-actions"><button class="btn btn-primary" data-action="finalize-career">Enter the League &raquo;</button></div></div>';
+      flowContainer.innerHTML = html;
+      flowContainer.querySelector('[data-action="finalize-career"]').addEventListener("click", finalizeCareerCreation);
+      return;
+    }
+    html += '<div class="draft-pool-scroll"><table class="data-table compact"><thead><tr><th>Pick</th><th>Team</th><th>Selection</th></tr></thead><tbody>';
+    for (var i = 0; i <= creationFlow.revealIndex && i < creationFlow.draftOrder.length; i++) {
+      var t = creationFlow.draftOrder[i];
+      var mine = i === creationFlow.pickIndex;
+      html += "<tr" + (mine ? ' class="draft-pool-top-pick"' : "") + "><td>" + (i + 1) + "</td><td>" + U.crestHtml(t, "crest-sm") + U.escapeHtml(t.name) + "</td><td>" +
+        (mine ? "<strong>YOU — " + U.escapeHtml((creationFlow.form.name || "").trim() || "your player") + "!</strong>" : "selects a prospect") + "</td></tr>";
+    }
+    html += "</tbody></table></div>";
+    if (creationFlow.revealIndex < creationFlow.pickIndex) {
+      html += '<div class="form-actions">';
+      html += '<button class="btn btn-primary" data-action="reveal-next-pick">Reveal Next Pick</button>';
+      html += '<button class="btn" data-action="skip-to-my-pick">Skip to My Pick</button>';
+      html += "</div>";
+    } else {
+      html += '<p class="pill pill-mvp">&#127942; ' + U.escapeHtml(creationFlow.team ? creationFlow.team.name : "A team") + " selects you!</p>";
+      html += '<div class="form-actions"><button class="btn btn-primary" data-action="finalize-career">Enter the League &raquo;</button></div>';
+    }
+    html += "</div>";
+    flowContainer.innerHTML = html;
+    var nextBtn = flowContainer.querySelector('[data-action="reveal-next-pick"]');
+    if (nextBtn) nextBtn.addEventListener("click", function () { creationFlow.revealIndex += 1; renderFlowStep(); });
+    var skipBtn = flowContainer.querySelector('[data-action="skip-to-my-pick"]');
+    if (skipBtn) skipBtn.addEventListener("click", function () { creationFlow.revealIndex = creationFlow.pickIndex; renderFlowStep(); });
+    var finalizeBtn = flowContainer.querySelector('[data-action="finalize-career"]');
+    if (finalizeBtn) finalizeBtn.addEventListener("click", finalizeCareerCreation);
+  }
+
+  function finalizeCareerCreation() {
+    var f = creationFlow.form;
+    var name = (f.name || "").trim() || U.randomGamertag();
+    var created = finalizePlayerRecord({
+      name: name,
+      position: f.position,
+      archetype: f.archetype,
+      overall: creationFlow.overall,
+      potential: creationFlow.potential,
+      team: creationFlow.team,
+    });
+    creationFlow = null;
+    var cb = onCareerCreated;
+    onCareerCreated = null;
+    if (cb) cb(created);
   }
 
   // ---------------- Trade requests ----------------------------------------
@@ -379,6 +683,7 @@
     mp.playerId = null;
     mp.tradeRequested = false;
     mp.gameplanChoice = null;
+    mp.trainingFocus = null;
     mp.milestonesHit = [];
     S.save();
     S.addNotification({
@@ -403,6 +708,7 @@
     checkContractOffer(p, mp);
     checkTradeRequest(p, mp);
     checkMilestones(p, mp);
+    applyWeeklyTraining(p, mp);
   }
 
   // ---------------- Rendering (My Career tab) ------------------------------
@@ -434,42 +740,6 @@
     }).join("");
   }
 
-  function renderCreationForm(heading, intro) {
-    if (!createForm.archetype || !archetypeExists(createForm.position, createForm.archetype)) {
-      createForm.archetype = U.randomArchetype(createForm.position);
-    }
-    var html = '<div class="form-card"><h3>' + U.escapeHtml(heading) + "</h3>";
-    html += '<p class="muted small">' + U.escapeHtml(intro) + "</p>";
-    html += '<div class="form-grid">';
-    html += '<label>Name<input type="text" id="mc-name" value="' + U.escapeHtml(createForm.name) + '" placeholder="Leave blank for a random gamertag"></label>';
-    html += '<label>Position<select id="mc-position">' + positionOptions(createForm.position) + "</select></label>";
-    html += '<label>Archetype<select id="mc-archetype">' + archetypeOptions(createForm.position, createForm.archetype) + "</select></label>";
-    html += "</div>";
-    html += '<div class="form-actions"><button class="btn btn-primary" data-action="create-player">Enter the League &raquo;</button></div>';
-    html += "</div>";
-    return html;
-  }
-
-  function wireCreationForm() {
-    var nameInput = container.querySelector("#mc-name");
-    if (nameInput) nameInput.addEventListener("input", function (e) { createForm.name = e.target.value; });
-    var posSel = container.querySelector("#mc-position");
-    if (posSel) posSel.addEventListener("change", function (e) {
-      createForm.position = e.target.value;
-      createForm.archetype = U.randomArchetype(createForm.position);
-      render();
-    });
-    var archSel = container.querySelector("#mc-archetype");
-    if (archSel) archSel.addEventListener("change", function (e) { createForm.archetype = e.target.value; });
-    var createBtn = container.querySelector('[data-action="create-player"]');
-    if (createBtn) createBtn.addEventListener("click", function () {
-      createPlayerAndEnterDraft({ name: createForm.name, position: createForm.position, archetype: createForm.archetype });
-      createForm = { name: "", position: "F", archetype: "" };
-      render();
-      if (window.PHLApp) window.PHLApp.refreshAll();
-    });
-  }
-
   function renderSendOff(summary) {
     var html = '<div class="panel-header"><h2>My Career</h2></div>';
     html += '<div class="empty-state"><h3>Career Over — ' + U.escapeHtml(summary.name) + "</h3>";
@@ -483,7 +753,7 @@
       ? '<p class="pill pill-mvp">&#127942; Inducted into the PHL Hall of Fame!</p>'
       : (summary.hofScore != null ? '<p class="muted small">Hall of Fame score: ' + summary.hofScore + " (220+ needed for induction)</p>" : "");
     html += "<p>Retired after Season " + summary.finishedSeason + ".</p></div>";
-    html += renderCreationForm("Start a New Career", "The league keeps going — build your next player and re-enter the amateur draft pool whenever you're ready.");
+    html += '<div id="mc-flow-root"></div>';
     return html;
   }
 
@@ -514,6 +784,27 @@
     return html;
   }
 
+  function renderTrainingSection(p, mp) {
+    var options = trainingFocusesFor(p.position);
+    var html = '<div class="hub-section"><h4>Training Focus</h4>';
+    if (p.overall >= p.potential) {
+      html += '<p class="muted small">You\'ve reached your full potential (' + p.potential + ' Overall) — nothing left to train toward.</p></div>';
+      return html;
+    }
+    html += '<p class="muted small">Pick a standing focus to work on between games — a weekly chance to nudge your Overall (and that attribute) toward your Potential of ' + p.potential + '.</p>';
+    html += '<div class="chip-row">';
+    options.forEach(function (f) {
+      var active = mp.trainingFocus === f.key;
+      html += '<button class="chip' + (active ? " chip-active" : "") + '" data-training="' + f.key + '" title="' + U.escapeHtml(f.desc) + '">' + U.escapeHtml(f.label) + "</button>";
+    });
+    html += "</div>";
+    if (mp.trainingFocus) {
+      html += '<button class="btn btn-sm" style="margin-top:8px" data-action="clear-training">Stop Training Focus</button>';
+    }
+    html += "</div>";
+    return html;
+  }
+
   function renderHub(p) {
     var mp = S.getMyPlayer();
     var team = p.teamId ? S.getTeam(p.teamId) : null;
@@ -535,6 +826,7 @@
 
     html += '<div class="dashboard-hub-grid">';
     html += renderThisWeek(p);
+    html += renderTrainingSection(p, mp);
 
     html += '<div class="hub-section"><h4>Trade Request</h4>';
     if (mp.tradeRequested) {
@@ -592,14 +884,22 @@
     if (mp && mp.pendingSendOff) {
       html = renderSendOff(mp.pendingSendOff);
       container.innerHTML = html;
-      wireCreationForm();
+      var sendOffRoot = container.querySelector("#mc-flow-root");
+      renderCareerCreationFlow(sendOffRoot, function () {
+        render();
+        if (window.PHLApp) window.PHLApp.refreshAll();
+      });
       return;
     }
     var p = mp && mp.playerId ? S.getPlayer(mp.playerId) : null;
     if (!p) {
-      html = '<div class="panel-header"><h2>My Career</h2></div>' + renderCreationForm("Create Your Player", "Build a player and enter the amateur draft pool to start your career.");
+      html = '<div class="panel-header"><h2>My Career</h2></div><div id="mc-flow-root"></div>';
       container.innerHTML = html;
-      wireCreationForm();
+      var flowRoot = container.querySelector("#mc-flow-root");
+      renderCareerCreationFlow(flowRoot, function () {
+        render();
+        if (window.PHLApp) window.PHLApp.refreshAll();
+      });
       return;
     }
     container.innerHTML = renderHub(p);
@@ -613,6 +913,14 @@
         render();
       });
     });
+    container.querySelectorAll("[data-training]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        setTrainingFocus(b.dataset.training);
+        render();
+      });
+    });
+    var clearTraining = container.querySelector('[data-action="clear-training"]');
+    if (clearTraining) clearTraining.addEventListener("click", function () { setTrainingFocus(null); render(); });
     var simBtn = container.querySelector('[data-action="sim-my-games"]');
     if (simBtn) simBtn.addEventListener("click", function () {
       var games = window.PHLCalendar ? window.PHLCalendar.simulateMyGamesThisWeek() : [];
@@ -650,6 +958,9 @@
     clearGameplanChoiceForNextWeek: clearGameplanChoiceForNextWeek,
     createPlayerAndEnterDraft: createPlayerAndEnterDraft,
     resolveContractOffer: resolveContractOffer,
+    renderCareerCreationFlow: renderCareerCreationFlow,
+    setTrainingFocus: setTrainingFocus,
+    TRAINING_FOCUSES: TRAINING_FOCUSES,
     GAMEPLANS: GAMEPLANS,
   };
 })();
